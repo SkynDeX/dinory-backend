@@ -1,7 +1,7 @@
-package com.sstt.dinory.repository;
+package com.sstt.dinory.domain.auth.repository;
 
-import com.sstt.dinory.entity.Member;
-import com.sstt.dinory.entity.RefreshToken;
+import com.sstt.dinory.domain.auth.entity.Member;
+import com.sstt.dinory.domain.auth.entity.RefreshToken;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

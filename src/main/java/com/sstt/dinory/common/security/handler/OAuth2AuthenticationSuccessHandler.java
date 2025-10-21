@@ -1,10 +1,10 @@
-package com.sstt.dinory.security.oauth2;
+package com.sstt.dinory.common.security.handler;
 
-import com.sstt.dinory.entity.Member;
-import com.sstt.dinory.entity.RefreshToken;
-import com.sstt.dinory.repository.RefreshTokenRepository;
-import com.sstt.dinory.security.CustomUserDetails;
-import com.sstt.dinory.security.jwt.JwtTokenProvider;
+import com.sstt.dinory.domain.auth.entity.Member;
+import com.sstt.dinory.domain.auth.entity.RefreshToken;
+import com.sstt.dinory.domain.auth.repository.RefreshTokenRepository;
+import com.sstt.dinory.common.security.service.CustomUserDetails;
+import com.sstt.dinory.domain.auth.service.JwtTokenProvider;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

@@ -1,8 +1,8 @@
-package com.sstt.dinory.controller;
+package com.sstt.dinory.domain.auth.controller;
 
-import com.sstt.dinory.security.CustomUserDetails;
-import com.sstt.dinory.service.MemberService;
-import com.sstt.dinory.service.RefreshTokenService;
+import com.sstt.dinory.common.security.service.CustomUserDetails;
+import com.sstt.dinory.domain.auth.service.MemberService;
+import com.sstt.dinory.domain.auth.service.RefreshTokenService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;

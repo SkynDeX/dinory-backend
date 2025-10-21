@@ -1,4 +1,4 @@
-package com.sstt.dinory.security.oauth2;
+package com.sstt.dinory.common.security.handler;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

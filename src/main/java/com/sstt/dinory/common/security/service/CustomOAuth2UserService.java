@@ -1,10 +1,13 @@
-package com.sstt.dinory.security.oauth2;
+package com.sstt.dinory.common.security.service;
 
-import com.sstt.dinory.entity.Member;
-import com.sstt.dinory.entity.OAuthProvider;
-import com.sstt.dinory.entity.Role;
-import com.sstt.dinory.repository.MemberRepository;
-import com.sstt.dinory.security.CustomUserDetails;
+import com.sstt.dinory.domain.auth.entity.Member;
+import com.sstt.dinory.domain.auth.entity.OAuthProvider;
+import com.sstt.dinory.domain.auth.entity.Role;
+import com.sstt.dinory.domain.auth.repository.MemberRepository;
+import com.sstt.dinory.domain.auth.oauth2.OAuth2UserInfo;
+import com.sstt.dinory.domain.auth.oauth2.GoogleOAuth2UserInfo;
+import com.sstt.dinory.domain.auth.oauth2.NaverOAuth2UserInfo;
+import com.sstt.dinory.domain.auth.oauth2.KakaoOAuth2UserInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;

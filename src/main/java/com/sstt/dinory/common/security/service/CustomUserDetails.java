@@ -1,6 +1,6 @@
-package com.sstt.dinory.security;
+package com.sstt.dinory.common.security.service;
 
-import com.sstt.dinory.entity.Member;
+import com.sstt.dinory.domain.auth.entity.Member;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;

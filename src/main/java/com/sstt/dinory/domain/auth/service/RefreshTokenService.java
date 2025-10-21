@@ -1,10 +1,9 @@
-package com.sstt.dinory.service;
+package com.sstt.dinory.domain.auth.service;
 
-import com.sstt.dinory.entity.Member;
-import com.sstt.dinory.entity.RefreshToken;
-import com.sstt.dinory.repository.MemberRepository;
-import com.sstt.dinory.repository.RefreshTokenRepository;
-import com.sstt.dinory.security.jwt.JwtTokenProvider;
+import com.sstt.dinory.domain.auth.entity.Member;
+import com.sstt.dinory.domain.auth.entity.RefreshToken;
+import com.sstt.dinory.domain.auth.repository.MemberRepository;
+import com.sstt.dinory.domain.auth.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -1,4 +1,4 @@
-package com.sstt.dinory.security.jwt;
+package com.sstt.dinory.domain.auth.service;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

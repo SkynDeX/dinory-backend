@@ -1,4 +1,4 @@
-package com.sstt.dinory.security.oauth2;
+package com.sstt.dinory.domain.auth.oauth2;
 
 import java.util.Map;
 

@@ -1,23 +1,23 @@
-package com.sstt.dinory.security.oauth2;
+package com.sstt.dinory.domain.auth.oauth2;
 
 import java.util.Map;
 
-public class GoogleOAuth2UserInfo implements OAuth2UserInfo {
+public class NaverOAuth2UserInfo implements OAuth2UserInfo {
 
     private final Map<String, Object> attributes;
 
-    public GoogleOAuth2UserInfo(Map<String, Object> attributes) {
-        this.attributes = attributes;
+    public NaverOAuth2UserInfo(Map<String, Object> attributes) {
+        this.attributes = (Map<String, Object>) attributes.get("response");
     }
 
     @Override
     public String getProviderId() {
-        return (String) attributes.get("sub");
+        return (String) attributes.get("id");
     }
 
     @Override
     public String getProvider() {
-        return "GOOGLE";
+        return "NAVER";
     }
 
     @Override
