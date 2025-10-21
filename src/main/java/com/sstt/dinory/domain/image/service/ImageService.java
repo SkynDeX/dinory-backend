@@ -62,8 +62,8 @@ public class ImageService {
             }
 
             try {
-                // 4. Pollinations AI 폴백 시도
-                String imageUrl = callPollinationsAI(request.getPrompt());
+                // 4. Pollinations AI 폴백 시도 (스타일 포함)
+                String imageUrl = callPollinationsAI(request.getPrompt(), request.getStyle());
 
                 imageGeneration.setStatus("completed");
                 imageGeneration.setImageUrl(imageUrl);
@@ -85,21 +85,40 @@ public class ImageService {
         return convertToResponse(imageGeneration);
     }
 
-    private String callPollinationsAI(String prompt) {
+    private String callPollinationsAI(String prompt, String style) {
         try {
             // Pollinations AI는 URL 기반으로 이미지 생성
-            // https://image.pollinations.ai/prompt/{prompt}
-            String encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8");
+            // 스타일을 프롬프트에 포함시킴
+            String fullPrompt = prompt;
+
+            if (style != null && !style.isEmpty() && !style.equals("default")) {
+                // 스타일을 자연어로 변환
+                String styleDescription = convertStyleToDescription(style);
+                fullPrompt = prompt + ", " + styleDescription;
+            }
+
+            String encodedPrompt = java.net.URLEncoder.encode(fullPrompt, "UTF-8");
             String imageUrl = "https://image.pollinations.ai/prompt/" + encodedPrompt +
                 "?width=1024&height=1024&nologo=true&enhance=true";
 
-            log.info("Generated Pollinations AI image URL: {}", imageUrl);
+            log.info("Pollinations AI 프롬프트: {}", fullPrompt);
             return imageUrl;
 
         } catch (Exception e) {
             log.error("Pollinations AI URL generation failed", e);
             throw new RuntimeException("Failed to generate Pollinations AI URL: " + e.getMessage(), e);
         }
+    }
+
+    private String convertStyleToDescription(String style) {
+        return switch (style.toLowerCase()) {
+            case "anime" -> "anime style, manga art";
+            case "photographic" -> "photorealistic, highly detailed photograph";
+            case "digital-art" -> "digital art, concept art";
+            case "cinematic" -> "cinematic lighting, movie scene";
+            case "fantasy-art" -> "fantasy art, magical atmosphere";
+            default -> "";
+        };
     }
 
     private String callStabilityAI(String prompt, String style) {
