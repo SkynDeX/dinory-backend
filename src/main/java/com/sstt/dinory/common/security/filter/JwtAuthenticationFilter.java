@@ -40,6 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Skip JWT authentication for public endpoints only
         String path = request.getRequestURI();
         if (path.startsWith("/api/image/") ||
+            path.startsWith("/api/emotion/") || // 동화 테스트로 저장
             path.startsWith("/api/auth/login") ||
             path.startsWith("/api/auth/refresh") ||
             path.startsWith("/oauth2/") ||
