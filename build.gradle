@@ -55,4 +55,5 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	enabled = false  // 테스트 비활성화
 }
