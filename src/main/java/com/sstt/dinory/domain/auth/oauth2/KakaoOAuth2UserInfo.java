@@ -26,6 +26,12 @@ public class KakaoOAuth2UserInfo implements OAuth2UserInfo {
 
     @Override
     public String getEmail() {
+        // 카카오 일반 앱은 이메일 수집 불가 (비즈니스 앱 전환 필요)
+        // 이메일이 없을 경우 가짜 이메일 생성: providerId@kakao.dinory.com
+        if (kakaoAccount == null || kakaoAccount.get("email") == null) {
+            String providerId = String.valueOf(attributes.get("id"));
+            return providerId + "@kakao.dinory.com";
+        }
         return (String) kakaoAccount.get("email");
     }
 

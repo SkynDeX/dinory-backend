@@ -8,7 +8,15 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "members")
+@Table(
+    name = "members",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_provider_provider_id",
+            columnNames = {"provider", "provider_id"}
+        )
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,7 +29,7 @@ public class Member {
     private Long id;
 
     @Column(nullable = false, unique = true, length = 100)
-    private String email;
+    private String email;  // 카카오는 providerId@kakao.dinory.com 형식으로 생성 (unique 보장)
 
     @Column(nullable = false, length = 50)
     private String name;
