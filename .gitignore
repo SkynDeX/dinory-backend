@@ -40,4 +40,5 @@ out/
 src/main/resources/application-local.yml
 src/main/resources/application-secret.yml
 src/main/resources/application-minjung.yml
+src/main/resources/tts-key.json
 .env

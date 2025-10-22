@@ -6,6 +6,8 @@ import com.google.protobuf.ByteString;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.api.gax.core.FixedCredentialsProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,7 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -24,6 +27,9 @@ public class TtsService {
 
     @Value("${gemini.api.key:}")
     private String geminiApiKey;
+
+    @Value("${gcp.tts.key-path:}")
+    private String gcpTtsKeyPath;
 
     private final WebClient webClient;
 
@@ -38,7 +44,23 @@ public class TtsService {
 
     /** Google Cloud TTS - MP3 생성 */
     public byte[] generateGoogleCloudTts(String text, String voiceName, Double speakingRate, Double pitch) throws IOException {
-        try (TextToSpeechClient textToSpeechClient = TextToSpeechClient.create()) {
+        // GCP 인증 키 파일 로드
+        GoogleCredentials credentials;
+        if (gcpTtsKeyPath != null && !gcpTtsKeyPath.isEmpty()) {
+            try (FileInputStream keyFileStream = new FileInputStream(gcpTtsKeyPath)) {
+                credentials = GoogleCredentials.fromStream(keyFileStream);
+            }
+        } else {
+            // 키 경로가 없으면 기본 credentials 사용 (GOOGLE_APPLICATION_CREDENTIALS 환경변수)
+            credentials = GoogleCredentials.getApplicationDefault();
+        }
+
+        // TextToSpeechClient 생성 시 credentials 명시
+        TextToSpeechSettings settings = TextToSpeechSettings.newBuilder()
+                .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                .build();
+
+        try (TextToSpeechClient textToSpeechClient = TextToSpeechClient.create(settings)) {
             SynthesisInput input = SynthesisInput.newBuilder().setText(text).build();
 
             VoiceSelectionParams voice = VoiceSelectionParams.newBuilder()
