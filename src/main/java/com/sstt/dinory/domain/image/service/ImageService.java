@@ -26,7 +26,7 @@ public class ImageService {
     private final ImageGenerationRepository imageGenerationRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${stability.api.key}")
+    @Value("${stability.api.key:}")
     private String stabilityApiKey;
 
     @Value("${stability.api.url:https://api.stability.ai/v2beta/stable-image/generate/ultra}")
