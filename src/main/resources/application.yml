@@ -1,6 +1,8 @@
 spring:
     application:
         name: dinory
+    codec:
+        max-in-memory-size: 16MB
 
     datasource:
         username: root
@@ -58,6 +60,10 @@ spring:
 jwt:
     access-token-expire: 300000
     refresh-token-expire: 604800000
+
+ai:
+    server:
+        url: http://localhost:8000
 
 springdoc:
     api-docs:
