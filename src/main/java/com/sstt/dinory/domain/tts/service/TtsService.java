@@ -14,11 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
@@ -28,8 +29,8 @@ public class TtsService {
     @Value("${gemini.api.key:}")
     private String geminiApiKey;
 
-    @Value("${gcp.tts.key-path:}")
-    private String gcpTtsKeyPath;
+    @Value("${gcp.tts.credentials-json:}")
+    private String gcpTtsCredentialsJson;
 
     private final WebClient webClient;
 
@@ -44,14 +45,16 @@ public class TtsService {
 
     /** Google Cloud TTS - MP3 생성 */
     public byte[] generateGoogleCloudTts(String text, String voiceName, Double speakingRate, Double pitch) throws IOException {
-        // GCP 인증 키 파일 로드
+        // GCP 인증 정보 로드 (application-secret.yml의 JSON 문자열)
         GoogleCredentials credentials;
-        if (gcpTtsKeyPath != null && !gcpTtsKeyPath.isEmpty()) {
-            try (FileInputStream keyFileStream = new FileInputStream(gcpTtsKeyPath)) {
-                credentials = GoogleCredentials.fromStream(keyFileStream);
+        if (gcpTtsCredentialsJson != null && !gcpTtsCredentialsJson.isEmpty()) {
+            // YAML의 멀티라인 문자열에서 credentials 로드
+            byte[] credentialsBytes = gcpTtsCredentialsJson.getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream credentialsStream = new ByteArrayInputStream(credentialsBytes)) {
+                credentials = GoogleCredentials.fromStream(credentialsStream);
             }
         } else {
-            // 키 경로가 없으면 기본 credentials 사용 (GOOGLE_APPLICATION_CREDENTIALS 환경변수)
+            // credentials가 없으면 기본 credentials 사용 (GOOGLE_APPLICATION_CREDENTIALS 환경변수)
             credentials = GoogleCredentials.getApplicationDefault();
         }
 
