@@ -20,6 +20,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.sstt.dinory.common.security.constants.SecurityConstants.*;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -39,17 +41,10 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/auth/**",
-                                "/api/image/**",
-                                "/api/tts/**",
-                                "/oauth2/**",
-                                "/login/**",
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/actuator/health",
-                                "/api/emotion/**"
-                        ).permitAll()
+                        // 공개 엔드포인트 (인증 불필요)
+                        .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+
+                        // 나머지는 모두 인증 필요 (이미지, TTS, 감정 분석 등 비즈니스 로직)
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
