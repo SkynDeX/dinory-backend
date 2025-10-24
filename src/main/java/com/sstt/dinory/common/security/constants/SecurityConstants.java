@@ -29,16 +29,11 @@ public final class SecurityConstants {
     // ========== 공개 엔드포인트 (인증 불필요) ==========
 
     /**
-     * 인증 관련 API
-     * <ul>
-     *   <li>/api/auth/login - 로그인</li>
-     *   <li>/api/auth/refresh - 토큰 갱신</li>
-     *   <li>/api/auth/logout - 로그아웃</li>
-     *   <li>/api/auth/me - 현재 사용자 정보</li>
-     *   <li>/api/auth/withdraw - 회원 탈퇴</li>
-     * </ul>
+     * 토큰 갱신 API (공개)
+     * <p>Refresh Token을 사용하여 새로운 Access Token 발급</p>
+     * <p><strong>주의:</strong> 이것만 공개 엔드포인트입니다! /api/auth/me, /api/auth/logout, /api/auth/withdraw는 인증 필요!</p>
      */
-    public static final String AUTH_API = "/api/auth/**";
+    public static final String AUTH_REFRESH = "/api/auth/refresh";
 
     /**
      * OAuth2 인증 플로우
@@ -80,9 +75,10 @@ public final class SecurityConstants {
      *
      * <p><strong>주의:</strong> 비즈니스 로직 엔드포인트는 여기에 추가하지 마세요!
      * 이미지, TTS, 감정 분석 등은 인증이 필요합니다.</p>
+     * <p><strong>/api/auth/me, /api/auth/logout, /api/auth/withdraw는 인증 필요하므로 여기에 포함되지 않습니다!</strong></p>
      */
     public static final String[] PUBLIC_ENDPOINTS = {
-        AUTH_API,
+        AUTH_REFRESH,
         OAUTH2,
         LOGIN,
         SWAGGER_UI,
@@ -90,7 +86,26 @@ public final class SecurityConstants {
         HEALTH_CHECK
     };
 
-    // ========== 인증 필요 엔드포인트 (비즈니스 로직) ==========
+    
+    // ========== 인증 필요 엔드포인트 ==========
+
+    /**
+     * 사용자 정보 조회 API (인증 필요)
+     * <p>현재 로그인한 사용자의 정보를 가져옴</p>
+     */
+    public static final String AUTH_ME = "/api/auth/me";
+
+    /**
+     * 로그아웃 API (인증 필요)
+     * <p>Refresh Token 삭제</p>
+     */
+    public static final String AUTH_LOGOUT = "/api/auth/logout";
+
+    /**
+     * 회원 탈퇴 API (인증 필요)
+     * <p>회원 정보 및 Refresh Token 삭제</p>
+     */
+    public static final String AUTH_WITHDRAW = "/api/auth/withdraw";
 
     /**
      * 이미지 생성 API
@@ -117,6 +132,12 @@ public final class SecurityConstants {
     public static final String CHILD_API = "/api/child/**";
 
     /**
+     * 채팅 API
+     * <p>디노와의 채팅 - 인증 필수</p>
+     */
+    public static final String CHAT_API = "/api/chat/**";
+
+    /**
      * 일기 API
      * <p>일기 작성/조회/수정/삭제 - 인증 필수</p>
      */
@@ -129,7 +150,7 @@ public final class SecurityConstants {
     public static final String STORY_API = "/api/story/**";
 
     /**
-     * 인증 필요 엔드포인트 배열
+     * 인증 필요 엔드포인트 배열 (문서화 목적)
      * <ul>
      *   <li>Spring Security: authenticated() 적용</li>
      *   <li>JWT Filter: 검증 수행</li>
@@ -140,10 +161,16 @@ public final class SecurityConstants {
      * 명시적으로 이 배열을 사용하지 않습니다.</p>
      */
     public static final String[] AUTHENTICATED_ENDPOINTS = {
+        // 인증 관련
+        AUTH_ME,
+        AUTH_LOGOUT,
+        AUTH_WITHDRAW,
+        // 비즈니스 로직
         IMAGE_API,
         TTS_API,
         EMOTION_API,
         CHILD_API,
+        CHAT_API,
         DIARY_API,
         STORY_API
     };
