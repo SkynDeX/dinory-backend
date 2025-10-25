@@ -8,8 +8,8 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.sstt.dinory.domain.child.entity.Child;
@@ -49,17 +49,8 @@ public class StoryService {
                 .orElseThrow(() -> new RuntimeException("Child 못 찾음: " + request.getChildId()));
         log.info("Child 조회 성공: {}", child.getName());
 
-        // story 조회 or 생성
-        Story story = storyRepository.findById(request.getStoryId())
-            .orElseGet(() -> {
-                log.info("story가 db에 없어서 임시 생성 : {}" , request.getStoryId());
-                Story newStory = Story.builder()
-                    .id(request.getStoryId())
-                    .title("생성된 동화")
-                    .category("임시")
-                    .build();
-                return storyRepository.save(newStory);
-            });
+        // story 조회 or 생성 (별도 트랜잭션에서 처리)
+        Story story = getOrCreateStory(request.getStoryId());
         log.info("Story 준비 완료: {}", story.getTitle());
 
         // AI 서버 호출 준비
@@ -146,6 +137,26 @@ public class StoryService {
         
         log.info("동화 완료 처리 완료 - 총 소요시간: {}초", request.getTotalTime());
         
+    }
+    
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Story getOrCreateStory(String storyId) {
+        return storyRepository.findById(storyId)
+            .orElseGet(() -> {
+                log.info("story가 db에 없어서 임시 생성 : {}", storyId);
+                Story newStory = Story.builder()
+                    .id(storyId)
+                    .title("생성된 동화")
+                    .category("임시")
+                    .build();
+                try {
+                    return storyRepository.save(newStory);
+                } catch (Exception e) {
+                    log.warn("Story 저장 중 에러, 재조회: {}", e.getMessage());
+                    return storyRepository.findById(storyId)
+                        .orElseThrow(() -> new RuntimeException("Story 조회 실패"));
+                }
+            });
     }
 
 
