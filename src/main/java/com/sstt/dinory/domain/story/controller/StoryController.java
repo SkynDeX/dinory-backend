@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import com.sstt.dinory.domain.story.dto.RecommendedStoryDto;
 import com.sstt.dinory.domain.story.dto.StoryChoiceRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompleteRequest;
+import com.sstt.dinory.domain.story.dto.StoryCompletionSummaryDto;
 import com.sstt.dinory.domain.story.dto.StoryGenerateRequest;
 import com.sstt.dinory.domain.story.service.StoryRecommendationService;
 import com.sstt.dinory.domain.story.service.StoryService;
@@ -107,10 +108,23 @@ public ResponseEntity<Map<String, Object>> completeStory(
     return ResponseEntity.ok(response);
 }
 
+    // 동화 완료 요약 조회
+    @GetMapping("/completion/{completionId}/summary")
+    public ResponseEntity<StoryCompletionSummaryDto> getStoryCompletionSummary(
+        @PathVariable Long completionId
+    ) {
+        log.info("=== 동화 완료 요약 조회 요청 ===");
+        log.info("completionId: {}", completionId);
+
+        StoryCompletionSummaryDto summary = storyService.getStoryCompletionSummary(completionId);
+
+        return ResponseEntity.ok(summary);
+    }
+
     // 헬스체크용
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Story Controller is working!");
     }
-    
+
 }

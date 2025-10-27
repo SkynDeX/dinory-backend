@@ -24,6 +24,9 @@ public class ChatSession {
     @Column(name = "child_id")
     private Long childId;
 
+    @Column(name = "story_completion_id")
+    private Long storyCompletionId;  // 동화 완료 후 챗봇인 경우 연결
+
     @CreationTimestamp
     @Column(name = "started_at", nullable = false, updatable = false)
     private LocalDateTime startedAt;

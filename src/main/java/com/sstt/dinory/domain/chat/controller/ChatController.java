@@ -1,5 +1,6 @@
 package com.sstt.dinory.domain.chat.controller;
 
+import com.sstt.dinory.domain.chat.dto.ChatInitFromStoryRequest;
 import com.sstt.dinory.domain.chat.dto.ChatInitRequest;
 import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
@@ -21,6 +22,12 @@ public class ChatController {
     @PostMapping("/init")
     public ResponseEntity<ChatResponseDto> initChatSession(@RequestBody ChatInitRequest request) {
         ChatResponseDto response = chatService.initChatSession(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/init-from-story")
+    public ResponseEntity<ChatResponseDto> initChatSessionFromStory(@RequestBody ChatInitFromStoryRequest request) {
+        ChatResponseDto response = chatService.initChatSessionFromStory(request);
         return ResponseEntity.ok(response);
     }
 

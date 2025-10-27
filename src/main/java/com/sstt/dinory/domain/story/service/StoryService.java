@@ -16,6 +16,7 @@ import com.sstt.dinory.domain.child.entity.Child;
 import com.sstt.dinory.domain.child.repository.ChildRepository;
 import com.sstt.dinory.domain.story.dto.StoryChoiceRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompleteRequest;
+import com.sstt.dinory.domain.story.dto.StoryCompletionSummaryDto;
 import com.sstt.dinory.domain.story.dto.StoryGenerateRequest;
 import com.sstt.dinory.domain.story.entity.Story;
 import com.sstt.dinory.domain.story.entity.StoryCompletion;
@@ -90,12 +91,13 @@ public class StoryService {
                 .build();
         storyCompletionRepository.save(completion);
         log.info("StoryCompletion 생성 완료: ID={}", completion.getId());
-        
-        // 6. 응답에 completionId 추가
-        generatedStory.put("completionId", completion.getId());
-        
-        log.info("=== 동화 생성 완료 ===");
-        return generatedStory;
+
+        // 6. 새로운 Map을 생성하여 응답에 completionId 추가
+        Map<String, Object> response = new HashMap<>(generatedStory);
+        response.put("completionId", completion.getId());
+
+        log.info("=== 동화 생성 완료 === completionId: {}", completion.getId());
+        return response;
     }
 
     @Transactional
@@ -159,5 +161,20 @@ public class StoryService {
             });
     }
 
+    // 동화 완료 요약 조회
+    @Transactional(readOnly = true)
+    public StoryCompletionSummaryDto getStoryCompletionSummary(Long completionId) {
+        log.info("=== 동화 완료 요약 조회 시작 ===");
+        log.info("completionId: {}", completionId);
+
+        StoryCompletion completion = storyCompletionRepository.findById(completionId)
+            .orElseThrow(() -> new RuntimeException("StoryCompletion을 찾을 수 없습니다: " + completionId));
+
+        StoryCompletionSummaryDto summary = StoryCompletionSummaryDto.from(completion);
+
+        log.info("동화 완료 요약 조회 완료 - 제목: {}, 아이: {}", summary.getStoryTitle(), summary.getChildName());
+
+        return summary;
+    }
 
 }
