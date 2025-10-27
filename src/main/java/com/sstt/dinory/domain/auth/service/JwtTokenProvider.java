@@ -66,15 +66,22 @@ public class JwtTokenProvider {
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token);
+            System.out.println("✅ JWT 토큰 검증 성공!");
             return true;
         } catch (SecurityException | MalformedJwtException e) {
-            System.out.println("Invalid JWT signature");
+            System.out.println("❌ JWT 검증 실패: Invalid JWT signature - " + e.getMessage());
+            e.printStackTrace();
         } catch (ExpiredJwtException e) {
-            System.out.println("Expired JWT token");
+            System.out.println("❌ JWT 검증 실패: Expired JWT token - " + e.getMessage());
+            System.out.println("만료 시간: " + e.getClaims().getExpiration());
+            System.out.println("현재 시간: " + new Date());
         } catch (UnsupportedJwtException e) {
-            System.out.println("Unsupported JWT token");
+            System.out.println("❌ JWT 검증 실패: Unsupported JWT token - " + e.getMessage());
         } catch (IllegalArgumentException e) {
-            System.out.println("JWT claims string is empty");
+            System.out.println("❌ JWT 검증 실패: JWT claims string is empty - " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("❌ JWT 검증 실패: Unknown error - " + e.getMessage());
+            e.printStackTrace();
         }
         return false;
     }

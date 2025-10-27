@@ -69,7 +69,27 @@ public class StoryController {
         return ResponseEntity.ok(generatedStory);
     }
 
-    // 선택지 저장하기
+    // 다음 씬 생성 (분기형 스토리)
+    @PostMapping("/completion/{completionId}/next-scene")
+    public ResponseEntity<Map<String, Object>> getNextScene(
+        @PathVariable Long completionId,
+        @RequestBody StoryChoiceRequest request
+    ) {
+        log.info("=== 다음 씬 요청 ===");
+        log.info("completionId: {}", completionId);
+        log.info("sceneNumber: {}", request.getSceneNumber());
+        log.info("choiceId: {}", request.getChoiceId());
+
+        // 선택 저장
+        storyService.saveChoice(completionId, request);
+
+        // 다음 씬 생성
+        Map<String, Object> nextScene = storyService.generateNextScene(completionId, request.getSceneNumber() + 1);
+
+        return ResponseEntity.ok(nextScene);
+    }
+
+    // 선택지 저장하기 (기존 API - 호환성 유지)
     @PostMapping("/completion/{completionId}/choice")
     public ResponseEntity<Map<String, Object>> saveChoice(
         @PathVariable Long completionId,

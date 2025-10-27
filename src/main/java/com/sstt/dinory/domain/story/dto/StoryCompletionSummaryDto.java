@@ -38,7 +38,7 @@ public class StoryCompletionSummaryDto {
     @AllArgsConstructor
     public static class ChoiceRecordDto {
         private Integer sceneNumber;
-        private Long choiceId;
+        private String choiceId;  // AI 서버에서 "c11", "c12" 등의 String 반환
         private String abilityType;
         private Integer abilityPoints;
     }

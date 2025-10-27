@@ -16,8 +16,8 @@ public class StoryChoiceRequest {
     private Long childId;
     private String storyId;
     private Integer sceneNumber;
-    private Long choiceId;
-    private String abilityType;      
+    private String choiceId;  // AI 서버에서 "c11", "c12" 등의 String 반환
+    private String abilityType;
     private Integer abilityPoints;   
     
 }
