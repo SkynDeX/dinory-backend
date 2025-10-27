@@ -4,6 +4,7 @@ import com.sstt.dinory.common.security.filter.JwtAuthenticationFilter;
 import com.sstt.dinory.common.security.handler.OAuth2AuthenticationFailureHandler;
 import com.sstt.dinory.common.security.handler.OAuth2AuthenticationSuccessHandler;
 import com.sstt.dinory.common.security.service.CustomOAuth2UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,6 +47,15 @@ public class SecurityConfig {
 
                         // 나머지는 모두 인증 필요 (이미지, TTS, 감정 분석 등 비즈니스 로직)
                         .anyRequest().authenticated()
+                )
+                // 인증 실패 시 401 Unauthorized 반환 (302 리다이렉션 방지)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json");
+                            response.setCharacterEncoding("UTF-8");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + authException.getMessage() + "\"}");
+                        })
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(authorization -> authorization
