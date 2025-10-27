@@ -68,8 +68,8 @@ spring:
                         user-name-attribute: id
 
 jwt:
-    access-token-expire: 300000
-    refresh-token-expire: 604800000
+    access-token-expire: 300000       # 5분 (300,000ms)
+    refresh-token-expire: 86400000    # 1일 (86,400,000ms)
 
 ai:
     server:
