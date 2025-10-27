@@ -47,9 +47,9 @@ public class Child {
 //    @Column(name = "concerns", columnDefinition = "json")
 //    private List<String> concerns;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "interests", columnDefinition = "json")
-    private List<String> interests;
+//    @JdbcTypeCode(SqlTypes.JSON)
+//    @Column(name = "interests", columnDefinition = "json")
+//    private List<String> interests;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "concerns", columnDefinition = "json")

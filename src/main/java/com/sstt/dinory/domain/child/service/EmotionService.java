@@ -30,10 +30,10 @@ public class EmotionService {
                 new RuntimeException("child 찾지 못함: " + request.getChildId()));
         
         // 관심사 업데이트
-        if(request.getInterests() != null && !request.getInterests().isEmpty()) {
-            child.setInterests(request.getInterests());
-            childRepository.save(child);
-        }
+//        if(request.getInterests() != null && !request.getInterests().isEmpty()) {
+//            child.setInterests(request.getInterests());
+//            childRepository.save(child);
+//        }
 
         // Sentiment 자동 분류
         String sentiment = classifySentiment(request.getEmotion());
