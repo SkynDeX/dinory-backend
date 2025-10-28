@@ -69,7 +69,18 @@ public class StoryController {
         return ResponseEntity.ok(generatedStory);
     }
 
-    // 다음 씬 생성 (분기형 스토리)
+    /**
+     * [2025-10-28 신규 추가] 다음 씬 생성 API (분기형 스토리)
+     *
+     * 변경 사유: 기존 8개 씬 미리 생성 방식에서 사용자 선택에 따른 분기형 스토리로 전환
+     * - 사용자가 선택지를 선택하면 해당 선택을 저장하고 다음 씬을 AI 서버에 요청
+     * - AI 서버는 이전 선택 히스토리를 기반으로 맥락에 맞는 다음 씬 생성
+     * - 최대 8개 씬까지 생성 가능하며, 8번째 씬에서 이야기 종료
+     *
+     * @param completionId 현재 진행 중인 스토리의 completion ID
+     * @param request 사용자의 선택 정보 (sceneNumber, choiceId, abilityType, abilityPoints)
+     * @return 다음 씬 정보 (scene 객체와 isEnding 플래그 포함)
+     */
     @PostMapping("/completion/{completionId}/next-scene")
     public ResponseEntity<Map<String, Object>> getNextScene(
         @PathVariable Long completionId,
@@ -83,7 +94,7 @@ public class StoryController {
         // 선택 저장
         storyService.saveChoice(completionId, request);
 
-        // 다음 씬 생성
+        // 다음 씬 생성 (AI 서버에 이전 선택 히스토리 전달)
         Map<String, Object> nextScene = storyService.generateNextScene(completionId, request.getSceneNumber() + 1);
 
         return ResponseEntity.ok(nextScene);
