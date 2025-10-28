@@ -1,6 +1,10 @@
 package com.sstt.dinory.domain.child.entity;
 
 import java.time.LocalDateTime;
+import java.util.List;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,6 +50,11 @@ public class EmotionLog {
     
     @Column(columnDefinition = "TEXT")
     private String context;  // 상황 설명
+
+    // 선택한 관심사 (JSON 배열로 저장)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "interests", columnDefinition = "json")
+    private List<String> interests;
     
     @Column(name = "recorded_at")
     private LocalDateTime recordedAt;

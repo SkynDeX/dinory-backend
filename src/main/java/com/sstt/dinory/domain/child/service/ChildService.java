@@ -145,6 +145,7 @@ public class ChildService {
         // 가장 최근 완료된 동화의 시간 가져오기
         LocalDateTime lastCompletedAt = completions.stream()
                 .map(StoryCompletion::getCompletedAt)
+                .filter(date -> date != null)  // [2025-10-28] 광현 추가 null 필터링 추가 
                 .max(LocalDateTime::compareTo)
                 .orElse(null);
 

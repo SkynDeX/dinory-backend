@@ -4,6 +4,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sstt.dinory.domain.child.entity.Child;
 
 import jakarta.persistence.Column;
@@ -53,6 +56,17 @@ public class StoryCompletion {
     @Column(length = 50)
     private String emotion;  // "기뻐요", "슬퍼요", "화나요", "무서워요", 등
 
+    // [2025-10-28 김광현 추가] 아이의 관심사
+    @Column(name = "interests", columnDefinition = "json")
+    @Convert(converter = InterestsConverter.class)
+    @Builder.Default
+    private List<String> interests = new ArrayList<>();
+
+    // [2025-10-28 김광현 추가] 누적 능력치 점수
+    @Column(name = "ability_score")
+    @Builder.Default
+    private Integer abilityScore = 0;
+
     // 선택 경로 JSON
     @Column(name = "choices_json", columnDefinition = "TEXT")
     @Convert(converter = ChoiceRecordListConverter.class)
@@ -95,6 +109,35 @@ public class StoryCompletion {
                 if (dbData == null || dbData.isEmpty()) return new ArrayList<>();
                 return objectMapper.readValue(dbData,
                         new com.fasterxml.jackson.core.type.TypeReference<List<ChoiceRecord>>() {});
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Error converting JSON to list", e);
+            }
+        }
+    }
+
+    // JSON Converter for interests
+    @jakarta.persistence.Converter
+    public static class InterestsConverter implements jakarta.persistence.AttributeConverter<List<String>, String> {
+        private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+
+        @Override
+        public String convertToDatabaseColumn(List<String> attribute) {
+            try {
+                return (attribute == null || attribute.isEmpty())
+                        ? "[]"
+                        : objectMapper.writeValueAsString(attribute);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Error converting list to JSON", e);
+            }
+        }
+
+        @Override
+        public List<String> convertToEntityAttribute(String dbData) {
+            try {
+                if (dbData == null || dbData.isEmpty()) return new ArrayList<>();
+                return objectMapper.readValue(dbData,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
             } catch (Exception e) {
                 throw new IllegalArgumentException("Error converting JSON to list", e);
             }

@@ -59,8 +59,10 @@ public class StoryService {
             .child(child)
             .story(story)
             .emotion(request.getEmotion())
+            .interests(request.getInterests()) // [2025-10-28 김광현] 추가
             .choicesJson(new ArrayList<>())
             .build();
+
         storyCompletionRepository.save(completion);
 
         // [2025-10-28 김민중 수정] Story의 title과 description을 AI 서버로 전송
@@ -132,6 +134,14 @@ public class StoryService {
             request.getAbilityType(),
             request.getAbilityPoints()
         );
+
+        // [2025-10-28 김광현]능력치 합산 
+        int points = (request.getAbilityPoints() == null) ? 0 : request.getAbilityPoints();
+        int currentScore = completion.getAbilityScore() != null ? completion.getAbilityScore() : 0;
+        int newScore = currentScore + points;
+        completion.setAbilityScore(newScore);
+        log.info("능력치 업데이트: {} -> {} ({}점 추가)", currentScore, newScore, points);
+
         completion.getChoicesJson().add(rec);
         storyCompletionRepository.save(completion);
 
