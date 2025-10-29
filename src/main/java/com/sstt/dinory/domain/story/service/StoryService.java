@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ import com.sstt.dinory.domain.story.repository.SceneRepository;
 import com.sstt.dinory.domain.story.repository.StoryCompletionRepository;
 import com.sstt.dinory.domain.story.repository.StoryRepository;
 
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,6 +45,8 @@ public class StoryService {
     private final WebClient.Builder webClientBuilder;
     private final SceneRepository sceneRepository;
     private final ChoiceRepository choiceRepository;
+    private final EntityManager entityManager;
+
 
     @Value("${ai.server.url:http://localhost:8000}")
     private String aiServerUrl;
@@ -52,18 +56,9 @@ public class StoryService {
     public Map<String, Object> generateStory(StoryGenerateRequest request) {
         Child child = childRepository.findById(request.getChildId())
             .orElseThrow(() -> new RuntimeException("Child 못 찾음: " + request.getChildId()));
+        
+        // Pinecone ID로 story 조회/생성
         Story story = getOrCreateStory(request.getStoryId());
-
-        // [2025-10-28 김민중 수정] emotion 저장
-        StoryCompletion completion = StoryCompletion.builder()
-            .child(child)
-            .story(story)
-            .emotion(request.getEmotion())
-            .interests(request.getInterests()) // [2025-10-28 김광현] 추가
-            .choicesJson(new ArrayList<>())
-            .build();
-
-        storyCompletionRepository.save(completion);
 
         // [2025-10-28 김민중 수정] Story의 title과 description을 AI 서버로 전송
         // childName은 동화 주인공 이름이 아닌, 개인화를 위한 참고용으로만 사용
@@ -81,7 +76,7 @@ public class StoryService {
         try {
             firstSceneResponse = webClientBuilder.build()
                 .post()
-                .uri(aiServerUrl + "/ai/generate-first-scene")
+                .uri(aiServerUrl + "/ai/generate-next-scene")
                 .bodyValue(aiRequest)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
@@ -96,12 +91,74 @@ public class StoryService {
                 .block();
         }
 
+        // AI 응답 전체 로그 추가
+        log.info("===== AI 응답 전체 =====");
+        log.info("AI Response Keys: {}", firstSceneResponse.keySet());
+        log.info("storyTitle in response: {}", firstSceneResponse.get("storyTitle"));
+        log.info("scene in response: {}", firstSceneResponse.get("scene"));
+        log.info("======================");
+
+        // AI 응답 검증
+        if (firstSceneResponse == null) {
+            throw new RuntimeException("AI 서버로부터 응답을 받지 못했습니다.");
+        }
+
+        // [2025-10-29 김광현] AI 생성한 한글 제목
+        String aiGeneratedTitle = null;
+        if(firstSceneResponse.containsKey("storyTitle")) {
+            aiGeneratedTitle = (String) firstSceneResponse.get("storyTitle");
+            if(aiGeneratedTitle != null && !aiGeneratedTitle.isBlank()) {
+                story.setTitle(aiGeneratedTitle);
+                log.info("AI가 생성한 동화 제목 업데이트 : {}", aiGeneratedTitle);
+            }
+        }
+
+        // 감정 기반 카테고리 설정
+        String category = mapEmotionToCategory(request.getEmotion());
+        story.setCategory(category);
+        storyRepository.save(story);
+        log.info("Story 업데이트 완료 - title: {}, category: {}", story.getTitle(), category);
+
+        // [2025-10-28 김민중 수정] emotion 저장 -> [2025-10-29 김광현] 위치 변경 AI응답성공해야만 DB에 저장
+        StoryCompletion completion = StoryCompletion.builder()
+            .child(child)
+            .story(story)
+            .emotion(request.getEmotion())
+            .interests(request.getInterests())  // [2025-10-28 김광현] 추가
+            .storyTitle(story.getTitle())       // [2025-10-29 김광현] 제목 저장 추가
+            .choicesJson(new ArrayList<>())
+            .build();
+
+        storyCompletionRepository.save(completion);
+        log.info("[StoryCompletion] AI 응답성공 후 저장완료 : completionId={}, completionTitle={}", completion.getId(), completion.getStoryTitle());
+
+
+
         saveSceneOnly(story, firstSceneResponse, 1);
 
         Map<String, Object> response = new HashMap<>(firstSceneResponse);
         response.put("completionId", completion.getId());
-        response.put("storyId", request.getStoryId());
+        response.put("storyId", story.getId());  // [2025-10-29 김광현] 변경
+        response.put("pineconeId", story.getPineconeId());  // [2025-10-29 김광현] 추가
         return response;
+    }
+
+    // 감정을 카테고리로 저장
+    private String mapEmotionToCategory(String emotion) {
+        if(emotion == null) {
+            return "일반";
+        }
+
+        return switch (emotion.toLowerCase()) {
+            case "happy", "기뻐요", "행복해요" -> "행복";
+            case "sad", "슬퍼요" -> "위로";
+            case "angry", "화나요" -> "감정조절";
+            case "scared", "무서워요" -> "용기";
+            case "excited", "신나요" -> "모험";
+            case "tired", "피곤해요" -> "휴식";
+            case "lonely", "외로워요" -> "우정";
+            default -> "일반";
+        };
     }
 
     /** 사용자가 고른 선택 저장: StoryCompletion + choice 테이블 */
@@ -185,21 +242,105 @@ public class StoryService {
         storyCompletionRepository.save(completion);
     }
 
+    // @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // public Story getOrCreateStory(String pineconeId) {
+    //     return storyRepository.findByPineconeId(pineconeId).orElseGet(() -> {
+
+    //         // [2025-10-29 김광현] sql 에러 방지
+    //         Optional<Story> existing = storyRepository.findByPineconeId(pineconeId);
+    //         if(existing.isPresent()) {
+    //             log.info("기존 Story 재사용: pineconeId={}, storyId={}\", pineconeId, existing.get().getId()");
+    //             return existing.get();
+    //         }
+
+    //         // 없으면 생성
+    //         Story newStory = Story.builder()
+    //             .pineconeId(pineconeId)
+    //             .title("동화 생성중...")
+    //             .category("미분류")
+    //             .description("AI가 동화를 생성중입니다.")
+    //             .build();
+
+    //         try {
+    //             Story saved = storyRepository.save(newStory);
+    //             log.info("새로운 story 생성: pineconeId={}, storyId={}", pineconeId, saved.getId()); 
+    //             return saved;
+
+    //         } catch (Exception e) {
+    //             // [2025-10-29 김광현] 동시성 문제에서 insert시 다시 조회
+    //             // UNIQUE 제약조건 위반 (동시성 문제로 다른 트랜잭션에서 이미 생성)
+    //             log.warn("동시성 문제로 Story 중복 생성 시도 감지: pineconeId={}", pineconeId);
+
+    //             // 실패한 엔티티 세션 제거(Hibernate 세션 정리)
+    //             entityManager.clear();
+
+    //             // 대기 후 재시도하기
+    //             try {
+    //                 Thread.sleep(100);
+    //             } catch (InterruptedException ie) {
+    //                 Thread.currentThread().interrupt();
+    //             }
+
+    //             // 다시 시도 (3번시도)
+    //             for (int i = 0; i < 3; i++) {
+    //                 Optional<Story> retryResult = storyRepository.findByPineconeId(pineconeId);
+    //                 if(retryResult.isPresent()) {
+    //                     log.info("재시도 {}번째 성공 : pineconeId={}", i + 1, pineconeId );
+    //                     return retryResult.get();
+    //                 }
+
+    //                 // 재시도 대기
+    //                 try {
+    //                     Thread.sleep(50 * (i +1));
+    //                 } catch (InterruptedException ie) {
+    //                     Thread.currentThread().interrupt();
+    //                 }
+    //             }
+                
+    //             throw new RuntimeException("Story 조회 실패(재시도 3번 실패):" + pineconeId);
+    //             // 다시 조회 (다른 트랜잭션에서 생성된 것 사용)
+    //             // return storyRepository.findByPineconeId(pineconeId)
+    //             //     .orElseThrow(() -> new RuntimeException("Story 조회 실패: " + pineconeId));
+    //         }
+    //     });
+    // }
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Story getOrCreateStory(String storyId) {
-        return storyRepository.findById(storyId).orElseGet(() -> {
-            Story newStory = Story.builder()
-                .id(storyId)
-                .title("생성된 동화")
-                .category("임시")
-                .build();
+    public Story getOrCreateStory(String pineconeId) {
+        Optional<Story> existing = storyRepository.findByPineconeId(pineconeId);
+        if (existing.isPresent()) {
+            log.info("기존 Story 재사용: pineconeId={}", pineconeId);
+            return existing.get();
+        }
+        
+        Story newStory = Story.builder()
+            .pineconeId(pineconeId)
+            .title("동화 생성중...")
+            .category("미분류")
+            .description("AI가 동화를 생성중입니다.")
+            .build();
+
+        try {
+            Story saved = storyRepository.save(newStory);
+            log.info("새로운 Story 생성: pineconeId={}, id={}", pineconeId, saved.getId());
+            return saved;
+        } catch (DataIntegrityViolationException e) {
+            // UNIQUE 제약조건 위반 - 동시 요청으로 다른 트랜잭션에서 이미 생성됨
+            log.warn("동시성 문제 감지, Story 재조회 시도: pineconeId={}", pineconeId);
+
+            entityManager.clear();
+            
+            // 짧은 대기 (다른 트랜잭션 커밋 대기)
             try {
-                return storyRepository.save(newStory);
-            } catch (Exception e) {
-                return storyRepository.findById(storyId)
-                    .orElseThrow(() -> new RuntimeException("Story 조회 실패"));
+                Thread.sleep(100);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
             }
-        });
+            
+            // 재조회
+            return storyRepository.findByPineconeId(pineconeId)
+                .orElseThrow(() -> new RuntimeException("Story 조회 실패: " + pineconeId));
+        }
+
     }
 
     @Transactional(readOnly = true)
@@ -221,7 +362,7 @@ public class StoryService {
         // [2025-10-28 김민중 수정] Story의 title과 description을 AI 서버로 전송
         // emotion을 completion에서 가져옴
         Map<String, Object> aiRequest = new HashMap<>();
-        aiRequest.put("storyId", story.getId());
+        aiRequest.put("storyId", story.getPineconeId());
         aiRequest.put("storyTitle", story.getTitle());
         aiRequest.put("storyDescription", story.getDescription());
         aiRequest.put("childId", child.getId());

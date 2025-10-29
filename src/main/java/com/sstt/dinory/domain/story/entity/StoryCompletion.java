@@ -4,8 +4,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import com.sstt.dinory.domain.child.entity.Child;
 
@@ -55,6 +53,10 @@ public class StoryCompletion {
     // [2025-10-28 김민중 추가] 동화 시작 시 아이의 감정 상태
     @Column(length = 50)
     private String emotion;  // "기뻐요", "슬퍼요", "화나요", "무서워요", 등
+
+    // [2025-10-29 김광현] 동화 제목
+    @Column(name = "story_title", length = 200)
+    private String storyTitle;
 
     // [2025-10-28 김광현 추가] 아이의 관심사
     @Column(name = "interests", columnDefinition = "json")

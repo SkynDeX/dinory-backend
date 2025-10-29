@@ -20,10 +20,10 @@ public interface StoryCompletionRepository extends JpaRepository<StoryCompletion
     List<StoryCompletion> findByChildId(Long childId);
     
     // 특정 아이의 특정 동화 완료 기록
-    Optional<StoryCompletion> findByChildIdAndStoryId(Long childId, String storyId);
+    Optional<StoryCompletion> findByChildIdAndStoryId(Long childId, Long storyId);
     
     // 특정 동화의 모든 완료 기록 (통계용)
-    List<StoryCompletion> findByStoryId(String storyId);
+    List<StoryCompletion> findByStoryId(Long storyId);
 
     Page<StoryCompletion> findByChildIdAndCompletedAtBetweenOrderByCompletedAtDesc(
             Long childId,

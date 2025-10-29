@@ -16,7 +16,7 @@ import java.util.Map;
 public class StoryCompletionDto {
 
     private Long completionId;
-    private String storyId;
+    private Long storyId;
     private String storyTitle;
     private String storyTheme;
     private LocalDateTime completedAt;

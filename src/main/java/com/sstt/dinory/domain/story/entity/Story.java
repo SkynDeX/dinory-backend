@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -23,8 +25,11 @@ import lombok.Setter;
 public class Story {
     
     @Id
-    @Column(length = 50)
-    private String  id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;    // [2025-10-29 김광현] id 타입변경
+
+    @Column(name = "pinecone_id", unique = true, length = 50)
+    private String pineconeId;  // [2025-10-29 김광현] 파이콘 아이디로 따로 관리
 
     @Column(nullable = false, length = 200)
     private String title;
