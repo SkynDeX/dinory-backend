@@ -1,6 +1,8 @@
 package com.sstt.dinory.domain.parent.controller;
 
 import com.sstt.dinory.domain.parent.dto.history.StoryHistoryResponseDto;
+import com.sstt.dinory.domain.parent.dto.overview.OverviewResponseDto;
+import com.sstt.dinory.domain.parent.service.OverviewService;
 import com.sstt.dinory.domain.parent.service.StoryHistoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,23 @@ import java.util.Map;
 public class ParentDashboardController {
 
     private final StoryHistoryService storyHistoryService;
+    private final OverviewService overviewService;
+
+    @GetMapping("/overview")
+    public ResponseEntity<OverviewResponseDto> getOverview(
+            @RequestParam Long childId,
+            @RequestParam(defaultValue = "day") String period) {
+
+        Map<String, Object> data = overviewService.getOverview(childId, period);
+
+        OverviewResponseDto overviewResponseDto = OverviewResponseDto.builder()
+                .abilities((Map<String, Double>) data.get("abilities"))
+                .totalStories((Integer) data.get("totalStories"))
+                .totalTime((Integer) data.get("totalTime"))
+                .build();
+
+        return ResponseEntity.ok(overviewResponseDto);
+    };
 
     @GetMapping("/story-history")
     public ResponseEntity<StoryHistoryResponseDto> getStoryHistory(
