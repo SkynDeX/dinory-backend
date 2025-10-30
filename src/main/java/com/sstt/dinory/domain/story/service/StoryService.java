@@ -104,15 +104,38 @@ public class StoryService {
             throw new RuntimeException("AI 서버로부터 응답을 받지 못했습니다.");
         }
 
-        // [2025-10-29 김광현] AI 생성한 한글 제목
-        String aiGeneratedTitle = null;
+        // [2025-10-30 김광현] 동화 제목 생성 로직
+        String finalTitle = "동화 생성중..."; // 기본값
         if(firstSceneResponse.containsKey("storyTitle")) {
-            aiGeneratedTitle = (String) firstSceneResponse.get("storyTitle");
+            String aiGeneratedTitle = (String) firstSceneResponse.get("storyTitle");
+            
             if(aiGeneratedTitle != null && !aiGeneratedTitle.isBlank()) {
-                story.setTitle(aiGeneratedTitle);
+                finalTitle = aiGeneratedTitle;
                 log.info("AI가 생성한 동화 제목 업데이트 : {}", aiGeneratedTitle);
             }
         }
+
+        // ai가 storyTitle을 생성을 안하면 첫번째 씬으로 생성
+        if(finalTitle.equals("동화 생성중...") && firstSceneResponse.containsKey("scene")) {
+            Map<String, Object> sceneData = (Map<String, Object>) firstSceneResponse.get("scene");
+            String sceneContent = null;
+
+            if(sceneData.containsKey("content")) {
+                sceneContent = (String) sceneData.get("content");
+            } else if (sceneData.containsKey(("text"))) {
+                sceneContent = (String) sceneData.get("text");
+            }
+
+            // 첫 30자를 제목으로 사용
+            if(sceneContent != null && !sceneContent.isBlank()) {
+                finalTitle = sceneContent.length() > 30 
+                    ? sceneContent.substring(0, 30) + "..." 
+                    : sceneContent;
+                log.info("첫 번째 씬 내용 기반 제목 생성: {}", finalTitle);
+            }
+
+        }
+        story.setTitle(finalTitle);
 
         // 감정 기반 카테고리 설정
         String category = mapEmotionToCategory(request.getEmotion());
@@ -153,10 +176,10 @@ public class StoryService {
         return switch (emotion.toLowerCase()) {
             case "happy", "기뻐요", "행복해요" -> "행복";
             case "sad", "슬퍼요" -> "위로";
-            case "angry", "화나요" -> "감정조절";
-            case "scared", "무서워요" -> "용기";
+            case "angry", "화나요", "화가 나요" -> "감정조절";
+            case "scared", "무서워요", "worried", "걱정돼요" -> "용기";
             case "excited", "신나요" -> "모험";
-            case "tired", "피곤해요" -> "휴식";
+            case "tired", "피곤해요", "sleepy", "졸려요" -> "휴식";
             case "lonely", "외로워요" -> "우정";
             default -> "일반";
         };
