@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -304,9 +305,11 @@ public class StoryService {
     //         }
     //     });
     // }
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW,
+                    isolation = Isolation.READ_COMMITTED)
     public Story getOrCreateStory(String pineconeId) {
-        Optional<Story> existing = storyRepository.findByPineconeId(pineconeId);
+        Optional<Story> existing = storyRepository.findByPineconeIdWithLock(pineconeId);
+
         if (existing.isPresent()) {
             log.info("기존 Story 재사용: pineconeId={}", pineconeId);
             return existing.get();
@@ -325,20 +328,39 @@ public class StoryService {
             return saved;
         } catch (DataIntegrityViolationException e) {
             // UNIQUE 제약조건 위반 - 동시 요청으로 다른 트랜잭션에서 이미 생성됨
-            log.warn("동시성 문제 감지, Story 재조회 시도: pineconeId={}", pineconeId);
+            log.warn("동시성 문제 감지, Story 재조회 시도 시작: pineconeId={}", pineconeId);
 
             entityManager.clear();
             
-            // 짧은 대기 (다른 트랜잭션 커밋 대기)
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
+            // 재시도 로직 (최대 5번)
+            for (int i = 0; i < 5; i++) {
+                // 점진적으로 대기 시간 증가 (100ms, 200ms, 300ms, 400ms, 500ms)
+                try {
+                    Thread.sleep(200 * (i + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.error("재조회 대기 중 인터럽트 발생", ie);
+                }
+
+                entityManager.flush();
+                entityManager.clear();
+                
+                // 재조회 시도
+                Optional<Story> retryStory = storyRepository.findByPineconeId(pineconeId);
+
+                if (retryStory.isPresent()) {
+                    log.info("✓ 재조회 성공 ({}번째 시도, {}ms 대기): pineconeId={}", 
+                        i + 1, 200 * (i + 1), pineconeId);
+                    return retryStory.get();
+                }
+                
+                log.warn("✗ 재조회 실패 ({}번째 시도): pineconeId={}, 다음 시도 대기중...", 
+                    i + 1, pineconeId);
             }
             
-            // 재조회
-            return storyRepository.findByPineconeId(pineconeId)
-                .orElseThrow(() -> new RuntimeException("Story 조회 실패: " + pineconeId));
+            // 5번 재시도 후에도 실패
+            log.error("Story 조회 최종 실패 (5번 재시도 완료): pineconeId={}", pineconeId);
+            throw new RuntimeException("Story 조회 실패 (5번 재시도 후): " + pineconeId);
         }
 
     }
