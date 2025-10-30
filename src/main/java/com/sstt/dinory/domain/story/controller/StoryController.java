@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -121,23 +122,23 @@ public class StoryController {
     }
 
     // 동화 완료
-@PostMapping("/completion/{completionId}/complete")
-public ResponseEntity<Map<String, Object>> completeStory(
-    @PathVariable Long completionId,
-    @RequestBody StoryCompleteRequest request
-) {
-    log.info("=== 동화 완료 요청 ===");
-    log.info("completionId: {}", completionId);
-    log.info("totalTime: {}", request.getTotalTime());
-    
-    storyService.completeStory(completionId, request);
-    
-    Map<String, Object> response = new HashMap<>();
-    response.put("success", true);
-    response.put("message", "동화가 완료되었습니다.");
-    
-    return ResponseEntity.ok(response);
-}
+    @PostMapping("/completion/{completionId}/complete")
+    public ResponseEntity<Map<String, Object>> completeStory(
+        @PathVariable Long completionId,
+        @RequestBody StoryCompleteRequest request
+    ) {
+        log.info("=== 동화 완료 요청 ===");
+        log.info("completionId: {}", completionId);
+        log.info("totalTime: {}", request.getTotalTime());
+        
+        storyService.completeStory(completionId, request);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "동화가 완료되었습니다.");
+        
+        return ResponseEntity.ok(response);
+    }
 
     // 동화 완료 요약 조회
     @GetMapping("/completion/{completionId}/summary")
@@ -151,6 +152,66 @@ public ResponseEntity<Map<String, Object>> completeStory(
 
         return ResponseEntity.ok(summary);
     }
+
+    // 커스텀 선택지
+    @PostMapping("/analyze-custom-choice")
+    public ResponseEntity<Map<String, Object>> analyzeCustomChoice(
+        @RequestBody Map<String, Object> request
+    ) {
+        log.info("=== 커스텀 선택지 분석 요청 ===");
+
+        Long completionId = null;
+        Integer sceneNumber = null;
+        String text = null;
+
+        try {
+            // completionId 파싱
+            if(request.get("completionId") != null) {
+                Object completionIdObj = request.get("completionId");
+                if(completionIdObj instanceof Number) {
+                    completionId = ((Number) completionIdObj).longValue();
+                } else {
+                    completionId = Long.valueOf(completionIdObj.toString());
+                }
+            }
+
+            // sceneNumber 파싱
+            if (request.get("sceneNumber") != null) {
+                Object sceneNumberObj = request.get("sceneNumber");
+                if (sceneNumberObj instanceof Number) {
+                    sceneNumber = ((Number) sceneNumberObj).intValue();
+                } else {
+                    sceneNumber = Integer.valueOf(sceneNumberObj.toString());
+                }
+            }
+
+            // text 파싱
+            if (request.get("text") != null) {
+                text = request.get("text").toString();
+            }
+
+            log.info("completionId: {}, sceneNumber: {}, text: {}", completionId, sceneNumber, text);
+
+            // 입력 검증
+            if (text == null || text.isBlank()) {
+                throw new IllegalArgumentException("text는 필수입니다.");
+            }
+
+            // StoryService를 통해 AI 분석 수행
+            Map<String, Object> analysisResult = storyService.analyzeCustomChoice(completionId, sceneNumber, text);
+
+            log.info("AI 분석 결과: {}", analysisResult);
+            return ResponseEntity.ok(analysisResult);
+                
+        } catch (Exception e) {
+            log.error("커스텀 선택지 분석 실패: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "분석 실패",
+                "message", e.getMessage()
+            ));
+        }
+    }   
+
 
     // 헬스체크용
     @GetMapping("/health")

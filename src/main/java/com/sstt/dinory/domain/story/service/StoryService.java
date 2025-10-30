@@ -464,4 +464,28 @@ public class StoryService {
             log.error("Scene 저장 오류: {}", e.getMessage(), e);
         }
     }
+
+    /** 커스텀 선택지 분석 */
+    public Map<String, Object> analyzeCustomChoice(Long completionId, Integer sceneNumber, String text) {
+        log.info("커스텀 선택지 AI 분석 요청: completionId={}, sceneNumber={}, text={}", 
+            completionId, sceneNumber, text);
+
+        // FastAPI로 전달할 요청 생성
+        Map<String, Object> aiRequest = new HashMap<>();
+        aiRequest.put("completionId", completionId);
+        aiRequest.put("sceneNumber", sceneNumber);
+        aiRequest.put("text", text);
+
+        // FastAPI 호출
+        Map<String, Object> aiResponse = webClientBuilder.build()
+            .post()
+            .uri(aiServerUrl + "/ai/analyze-custom-choice")
+            .bodyValue(aiRequest)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+            .block();
+
+        log.info("AI 분석 응답: {}", aiResponse);
+        return aiResponse;
+    }
 }
