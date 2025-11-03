@@ -19,19 +19,11 @@ import com.sstt.dinory.domain.story.entity.Scene;
 @Repository
 public interface ChoiceRepository extends JpaRepository<Choice, Long> {
 
-    /**
-     * 특정 씬의 모든 선택지 조회
-     * @param scene Scene 엔티티
-     * @return Choice 리스트
-     */
     List<Choice> findByScene(Scene scene);
 
-    /**
-     * [2025-10-28 김민중 추가] 중복 선택지 체크
-     * 동일한 씬에 동일한 choiceText가 저장되어 있는지 확인
-     * @param scene Scene 엔티티
-     * @param choiceText 선택지 텍스트
-     * @return Choice 엔티티 (있으면 반환, 없으면 empty)
-     */
+    // ✅ 중복 체크용 (StoryService.saveChoice 에서 호출)
     Optional<Choice> findBySceneAndChoiceText(Scene scene, String choiceText);
+
+    // (선택) 존재 여부만 필요하면 이것도 유용
+    // boolean existsBySceneAndChoiceText(Scene scene, String choiceText);
 }

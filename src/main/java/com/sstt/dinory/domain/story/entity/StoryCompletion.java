@@ -53,6 +53,12 @@ public class StoryCompletion {
     @Column(length = 50)
     private String emotion;  // "기뻐요", "슬퍼요", "화나요", "무서워요", 등
 
+    // [2025-10-28 김민중 추가] 동화 시작 시 선택한 관심사 (child의 interests보다 우선)
+    @Column(name = "selected_interests", columnDefinition = "TEXT")
+    @Convert(converter = StringListConverter.class)
+    @Builder.Default
+    private List<String> selectedInterests = new ArrayList<>();
+
     // 선택 경로 JSON
     @Column(name = "choices_json", columnDefinition = "TEXT")
     @Convert(converter = ChoiceRecordListConverter.class)
@@ -95,6 +101,35 @@ public class StoryCompletion {
                 if (dbData == null || dbData.isEmpty()) return new ArrayList<>();
                 return objectMapper.readValue(dbData,
                         new com.fasterxml.jackson.core.type.TypeReference<List<ChoiceRecord>>() {});
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Error converting JSON to list", e);
+            }
+        }
+    }
+
+    // [2025-10-28 김민중 추가] String List Converter for interests
+    @jakarta.persistence.Converter
+    public static class StringListConverter implements jakarta.persistence.AttributeConverter<List<String>, String> {
+        private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+
+        @Override
+        public String convertToDatabaseColumn(List<String> attribute) {
+            try {
+                return (attribute == null || attribute.isEmpty())
+                        ? "[]"
+                        : objectMapper.writeValueAsString(attribute);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Error converting list to JSON", e);
+            }
+        }
+
+        @Override
+        public List<String> convertToEntityAttribute(String dbData) {
+            try {
+                if (dbData == null || dbData.isEmpty()) return new ArrayList<>();
+                return objectMapper.readValue(dbData,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
             } catch (Exception e) {
                 throw new IllegalArgumentException("Error converting JSON to list", e);
             }

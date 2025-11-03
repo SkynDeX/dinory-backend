@@ -1,10 +1,7 @@
 package com.sstt.dinory.domain.story.service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -54,24 +51,29 @@ public class StoryService {
             .orElseThrow(() -> new RuntimeException("Child 못 찾음: " + request.getChildId()));
         Story story = getOrCreateStory(request.getStoryId());
 
-        // [2025-10-28 김민중 수정] emotion 저장
+        // [2025-10-28 김민중 수정] emotion과 선택한 interests 저장
         StoryCompletion completion = StoryCompletion.builder()
             .child(child)
             .story(story)
             .emotion(request.getEmotion())
+            .selectedInterests(request.getInterests() != null ? request.getInterests() : new ArrayList<>())
             .choicesJson(new ArrayList<>())
             .build();
         storyCompletionRepository.save(completion);
 
+        // [2025-10-28 김민중 수정] interests 우선순위: 입력받은 값 > child의 interests
+        List<String> interests = (request.getInterests() != null && !request.getInterests().isEmpty())
+            ? request.getInterests()
+            : (child.getInterests() != null ? child.getInterests() : new ArrayList<>());
+
         // [2025-10-28 김민중 수정] Story의 title과 description을 AI 서버로 전송
-        // childName은 동화 주인공 이름이 아닌, 개인화를 위한 참고용으로만 사용
         Map<String, Object> aiRequest = new HashMap<>();
         aiRequest.put("storyId", request.getStoryId());
         aiRequest.put("storyTitle", story.getTitle());
         aiRequest.put("storyDescription", story.getDescription());
         aiRequest.put("childId", request.getChildId());
         aiRequest.put("emotion", request.getEmotion());
-        aiRequest.put("interests", request.getInterests() != null ? request.getInterests() : new ArrayList<>());
+        aiRequest.put("interests", interests);
         aiRequest.put("sceneNumber", 1);
         aiRequest.put("previousChoices", new ArrayList<>());
 
@@ -208,15 +210,20 @@ public class StoryService {
         Child child = completion.getChild();
         Story story = completion.getStory();
 
+        // [2025-10-28 김민중 수정] interests 우선순위: completion에 저장된 값 > child의 interests
+        List<String> interests = (completion.getSelectedInterests() != null && !completion.getSelectedInterests().isEmpty())
+            ? completion.getSelectedInterests()
+            : (child.getInterests() != null ? child.getInterests() : new ArrayList<>());
+
         // [2025-10-28 김민중 수정] Story의 title과 description을 AI 서버로 전송
-        // emotion을 completion에서 가져옴
+        // emotion과 interests를 completion에서 가져옴
         Map<String, Object> aiRequest = new HashMap<>();
         aiRequest.put("storyId", story.getId());
         aiRequest.put("storyTitle", story.getTitle());
         aiRequest.put("storyDescription", story.getDescription());
         aiRequest.put("childId", child.getId());
         aiRequest.put("emotion", completion.getEmotion() != null ? completion.getEmotion() : "중립");
-        aiRequest.put("interests", child.getInterests() != null ? child.getInterests() : new ArrayList<>());
+        aiRequest.put("interests", interests);
         aiRequest.put("sceneNumber", nextSceneNumber);
 
         java.util.List<Map<String, Object>> prev = new java.util.ArrayList<>();

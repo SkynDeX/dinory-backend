@@ -139,7 +139,7 @@ public ResponseEntity<Map<String, Object>> completeStory(
     return ResponseEntity.ok(response);
 }
 
-    // 동화 완료 요약 조회
+    // 동화 완료 요약 조회 - 
     @GetMapping("/completion/{completionId}/summary")
     public ResponseEntity<StoryCompletionSummaryDto> getStoryCompletionSummary(
         @PathVariable Long completionId
