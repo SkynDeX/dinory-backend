@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
 import com.sstt.dinory.domain.child.entity.Child;
 
 import jakarta.persistence.Column;
@@ -53,11 +54,20 @@ public class StoryCompletion {
     @Column(length = 50)
     private String emotion;  // "기뻐요", "슬퍼요", "화나요", "무서워요", 등
 
-    // [2025-10-28 김민중 추가] 동화 시작 시 선택한 관심사 (child의 interests보다 우선)
-    @Column(name = "selected_interests", columnDefinition = "TEXT")
-    @Convert(converter = StringListConverter.class)
+    // [2025-10-29 김광현] 동화 제목
+    @Column(name = "story_title", length = 200)
+    private String storyTitle;
+
+    // [2025-10-28 김광현 추가] 아이의 관심사
+    @Column(name = "interests", columnDefinition = "json")
+    @Convert(converter = InterestsConverter.class)
     @Builder.Default
-    private List<String> selectedInterests = new ArrayList<>();
+    private List<String> interests = new ArrayList<>();
+
+    // [2025-10-28 김광현 추가] 누적 능력치 점수
+    @Column(name = "ability_score")
+    @Builder.Default
+    private Integer abilityScore = 0;
 
     // 선택 경로 JSON
     @Column(name = "choices_json", columnDefinition = "TEXT")
@@ -107,9 +117,9 @@ public class StoryCompletion {
         }
     }
 
-    // [2025-10-28 김민중 추가] String List Converter for interests
+    // JSON Converter for interests
     @jakarta.persistence.Converter
-    public static class StringListConverter implements jakarta.persistence.AttributeConverter<List<String>, String> {
+    public static class InterestsConverter implements jakarta.persistence.AttributeConverter<List<String>, String> {
         private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
                 new com.fasterxml.jackson.databind.ObjectMapper();
 

@@ -19,7 +19,8 @@ public class StoryCompletionSummaryDto {
     private Long completionId;
     private Long childId;
     private String childName;
-    private String storyId;
+    private Long  storyId;
+    private String pineconeId; // Pinecone UUID    
     private String storyTitle;
     private Integer totalTime;
     private LocalDateTime completedAt;
@@ -79,6 +80,7 @@ public class StoryCompletionSummaryDto {
             .childId(completion.getChild().getId())
             .childName(completion.getChild().getName())
             .storyId(completion.getStory().getId())
+            .pineconeId(completion.getStory().getPineconeId())
             .storyTitle(completion.getStory().getTitle())
             .totalTime(completion.getTotalTime())
             .completedAt(completion.getCompletedAt())
