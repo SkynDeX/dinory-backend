@@ -2,14 +2,20 @@ package com.sstt.dinory.domain.chat.controller;
 
 import com.sstt.dinory.domain.chat.dto.ChatInitFromStoryRequest;
 import com.sstt.dinory.domain.chat.dto.ChatInitRequest;
+import com.sstt.dinory.domain.chat.dto.ChatMessageDto;
 import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
+import com.sstt.dinory.domain.chat.entity.ChatMessage;
+import com.sstt.dinory.domain.chat.repository.ChatMessageRepository;
 import com.sstt.dinory.domain.chat.service.ChatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/chat")
@@ -18,6 +24,7 @@ import java.util.List;
 public class ChatController {
 
     private final ChatService chatService;
+    private final ChatMessageRepository chatMessageRepository;
 
     @PostMapping("/init")
     public ResponseEntity<ChatResponseDto> initChatSession(@RequestBody ChatInitRequest request) {
@@ -53,5 +60,29 @@ public class ChatController {
     public ResponseEntity<List<ChatResponseDto>> getChatSessionsByChild(@PathVariable Long childId) {
         List<ChatResponseDto> responses = chatService.getChatSessionsByChild(childId);
         return ResponseEntity.ok(responses);
+    }
+
+    /**
+     * RAG: 특정 아이의 최근 대화 기록 조회
+     * FastAPI의 MemoryService가 호출
+     */
+    @GetMapping("/history/child/{childId}")
+    public ResponseEntity<List<ChatMessageDto>> getChatHistoryByChild(
+            @PathVariable Long childId,
+            @RequestParam(defaultValue = "10") int limit) {
+
+        Pageable pageable = PageRequest.of(0, limit);
+        List<ChatMessage> messages = chatMessageRepository.findRecentMessagesByChildId(childId, pageable);
+
+        List<ChatMessageDto> dtos = messages.stream()
+                .map(msg -> ChatMessageDto.builder()
+                        .sessionId(msg.getChatSession().getId())
+                        .message(msg.getMessage())
+                        .sender(msg.getSender())
+                        .createdAt(msg.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(dtos);
     }
 }

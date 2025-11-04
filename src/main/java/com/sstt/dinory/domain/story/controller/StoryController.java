@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,8 +15,12 @@ import com.sstt.dinory.domain.story.dto.StoryChoiceRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompleteRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompletionSummaryDto;
 import com.sstt.dinory.domain.story.dto.StoryGenerateRequest;
+import com.sstt.dinory.domain.story.entity.StoryCompletion;
+import com.sstt.dinory.domain.story.repository.StoryCompletionRepository;
 import com.sstt.dinory.domain.story.service.StoryRecommendationService;
 import com.sstt.dinory.domain.story.service.StoryService;
+
+import java.util.stream.Collectors;
 
 
 import lombok.RequiredArgsConstructor;
@@ -26,9 +32,10 @@ import lombok.extern.slf4j.Slf4j;
 @CrossOrigin(origins = "http://localhost:3000")
 @Slf4j
 public class StoryController {
-    
+
     private final StoryRecommendationService recommendationService;
     private final StoryService storyService;
+    private final StoryCompletionRepository storyCompletionRepository;
 
     // 동화추천
     @PostMapping("/recommended")
@@ -217,6 +224,30 @@ public class StoryController {
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Story Controller is working!");
+    }
+
+    /**
+     * RAG: 특정 아이의 최근 동화 완료 기록 조회
+     * FastAPI의 MemoryService가 호출
+     */
+    @GetMapping("/completions/child/{childId}")
+    public ResponseEntity<List<StoryCompletionSummaryDto>> getStoryCompletionsByChild(
+            @PathVariable Long childId,
+            @RequestParam(defaultValue = "5") int limit) {
+
+        log.info("=== RAG: 동화 완료 기록 조회 ===");
+        log.info("childId: {}, limit: {}", childId, limit);
+
+        Pageable pageable = PageRequest.of(0, limit);
+        List<StoryCompletion> completions = storyCompletionRepository.findRecentCompletionsByChildId(childId, pageable);
+
+        List<StoryCompletionSummaryDto> dtos = completions.stream()
+                .map(StoryCompletionSummaryDto::from)
+                .collect(Collectors.toList());
+
+        log.info("조회된 동화 완료 기록: {}개", dtos.size());
+
+        return ResponseEntity.ok(dtos);
     }
 
 }

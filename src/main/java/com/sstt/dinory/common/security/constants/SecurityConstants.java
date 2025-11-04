@@ -67,6 +67,13 @@
         public static final String HEALTH_CHECK = "/actuator/health";
 
         /**
+         * RAG 메모리 API (FastAPI에서 호출)
+         * <p>FastAPI의 MemoryService가 MySQL 데이터를 조회하기 위한 API</p>
+         */
+        public static final String RAG_CHAT_HISTORY = "/api/chat/history/child/**";
+        public static final String RAG_STORY_COMPLETIONS = "/api/story/completions/child/**";
+
+        /**
          * 완전 공개 엔드포인트 배열
          * <ul>
          *   <li>Spring Security: permitAll() 적용</li>
@@ -83,7 +90,9 @@
             LOGIN,
             SWAGGER_UI,
             API_DOCS,
-            HEALTH_CHECK
+            HEALTH_CHECK,
+            RAG_CHAT_HISTORY,
+            RAG_STORY_COMPLETIONS
         };
 
 

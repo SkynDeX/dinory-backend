@@ -9,19 +9,21 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.sstt.dinory.domain.story.entity.StoryCompletion;
 
 @Repository
 public interface StoryCompletionRepository extends JpaRepository<StoryCompletion, Long>{
-    
+
      // 특정 아이의 모든 동화 완료 기록
     List<StoryCompletion> findByChildId(Long childId);
-    
+
     // 특정 아이의 특정 동화 완료 기록
     Optional<StoryCompletion> findByChildIdAndStoryId(Long childId, Long storyId);
-    
+
     // 특정 동화의 모든 완료 기록 (통계용)
     List<StoryCompletion> findByStoryId(Long storyId);
 
@@ -37,4 +39,10 @@ public interface StoryCompletionRepository extends JpaRepository<StoryCompletion
             LocalDateTime startDate,
             LocalDateTime endDate
     );
+
+    // RAG: 특정 아이의 최근 동화 완료 기록 조회
+    @Query("SELECT sc FROM StoryCompletion sc " +
+           "WHERE sc.child.id = :childId " +
+           "ORDER BY sc.completedAt DESC")
+    List<StoryCompletion> findRecentCompletionsByChildId(@Param("childId") Long childId, Pageable pageable);
 }

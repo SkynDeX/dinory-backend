@@ -63,6 +63,7 @@ public class ChatService {
     public ChatResponseDto initChatSessionFromStory(ChatInitFromStoryRequest request) {
         log.info("=== 동화 기반 챗봇 세션 시작 ===");
         log.info("completionId: {}", request.getCompletionId());
+        log.info("★★★ initChatSessionFromStory 호출됨! ★★★");
 
         // StoryCompletion 조회
         StoryCompletion completion = storyCompletionRepository.findById(request.getCompletionId())
@@ -233,7 +234,7 @@ public class ChatService {
             requestBody.put("session_id", sessionId.intValue());
             requestBody.put("child_id", summary.getChildId().intValue());
             requestBody.put("child_name", summary.getChildName());
-            requestBody.put("story_id", summary.getStoryId());
+            requestBody.put("story_id", String.valueOf(summary.getStoryId())); // 문자열로 변환
             requestBody.put("story_title", summary.getStoryTitle());
             requestBody.put("total_time", summary.getTotalTime());
 
