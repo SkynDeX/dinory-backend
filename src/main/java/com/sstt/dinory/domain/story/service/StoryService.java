@@ -59,6 +59,11 @@ public class StoryService {
     /** 첫 번째 씬 생성 */
     @Transactional
     public Map<String, Object> generateStory(StoryGenerateRequest request) {
+        // [2025-11-04 김민중 수정] childId 필수 검증 추가
+        if (request.getChildId() == null) {
+            throw new IllegalArgumentException("childId는 필수입니다. 프론트에서 childId를 전송해주세요.");
+        }
+
         Child child = childRepository.findById(request.getChildId())
             .orElseThrow(() -> new RuntimeException("Child 못 찾음: " + request.getChildId()));
         
@@ -462,7 +467,7 @@ public class StoryService {
             }
 
             // [2025-11-03 김광현] 이미지가 없으면 생성 또는 캐시에서 가져오기
-            if (scene.getImageUrl() == null && !scene.getContent().isEmpty()) {
+            if (scene.getImageUrl() == null && !scene.getContent().isEmpty() && scene.getId() != null) {
                 try {
                     // 영어 프롬프트 생성
                     String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
@@ -608,27 +613,84 @@ public class StoryService {
     }
 
     /**
-     * [2025-11-03 김광현] 한글 동화 내용을 이미지 프롬프트로 준비
-     * 실제 영어 변환 및 처리는 ImageService에서 담당
+     * [2025-11-04 수정] 한글 동화 내용을 AI 서버에서 영어 이미지 프롬프트로 변환
+     * FastAPI 서버의 /ai/create-image-prompt를 호출하여 핵심 시각적 요소만 추출
      */
     private String translateToEnglishImagePrompt(String koreanText) {
-        try {
-            // 동화 내용을 적절한 길이로 축약 (URL 길이 제한 고려)
-            int maxLength = 80;  // 한글 80자 정도면 URL 인코딩 후 약 240자
-            String shortText = koreanText.length() > maxLength 
-                ? koreanText.substring(0, maxLength) + "..." 
-                : koreanText;
-            
-            // 스타일 키워드 추가 (영어)
-            String prompt = "children's book illustration, " + shortText;
-            
-            log.info("프롬프트 준비: {}자 → {}자", koreanText.length(), prompt.length());
-            
-            return prompt;
-            
-        } catch (Exception e) {
-            log.error("프롬프트 준비 실패: {}", e.getMessage());
-            return "children's book illustration, fairy tale scene";
+        // 입력 검증
+        if (koreanText == null || koreanText.trim().isEmpty()) {
+            log.warn("동화 내용이 비어있음, 기본 프롬프트 사용");
+            return "Children's book illustration, warm and friendly atmosphere, digital art";
         }
+
+        try {
+            // FastAPI 서버에 프롬프트 생성 요청
+            Map<String, Object> request = new HashMap<>();
+            request.put("koreanText", koreanText);
+            request.put("maxLength", 150);  // 최대 150자로 제한
+
+            log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
+
+            Map<String, Object> response = webClientBuilder.build()
+                .post()
+                .uri(aiServerUrl + "/ai/create-image-prompt")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block();
+
+            if (response != null && response.containsKey("imagePrompt")) {
+                String imagePrompt = (String) response.get("imagePrompt");
+
+                // 프롬프트 검증
+                if (imagePrompt != null && !imagePrompt.trim().isEmpty()) {
+                    log.info("AI 프롬프트 생성 완료: {}자 → {}자 ({})",
+                        koreanText.length(),
+                        imagePrompt.length(),
+                        imagePrompt.substring(0, Math.min(50, imagePrompt.length())));
+                    return imagePrompt;
+                }
+            }
+
+            log.warn("AI 프롬프트 생성 응답이 비어있음, 폴백 사용");
+            return createFallbackPrompt(koreanText);
+
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            log.error("AI 서버 응답 오류 ({}): {}, 폴백 사용", e.getStatusCode(), e.getMessage());
+            return createFallbackPrompt(koreanText);
+        } catch (Exception e) {
+            log.error("AI 프롬프트 생성 실패: {}, 폴백 사용", e.getMessage());
+            return createFallbackPrompt(koreanText);
+        }
+    }
+
+    /**
+     * [2025-11-04 추가] 폴백 프롬프트 생성
+     */
+    private String createFallbackPrompt(String koreanText) {
+        // 간단한 키워드 추출 (한글 동화에서 명사/동사 감지)
+        String basePrompt = "Children's book illustration, warm and friendly atmosphere";
+
+        // 동화 내용에서 간단한 키워드 추출
+        if (koreanText.contains("숲") || koreanText.contains("나무")) {
+            basePrompt += ", forest scene";
+        } else if (koreanText.contains("바다") || koreanText.contains("물고기")) {
+            basePrompt += ", ocean scene";
+        } else if (koreanText.contains("하늘") || koreanText.contains("구름")) {
+            basePrompt += ", sky scene";
+        }
+
+        if (koreanText.contains("친구") || koreanText.contains("함께")) {
+            basePrompt += ", friendship";
+        }
+
+        if (koreanText.contains("용기") || koreanText.contains("용감")) {
+            basePrompt += ", brave character";
+        }
+
+        basePrompt += ", soft pastel colors, digital art";
+
+        log.info("폴백 프롬프트 생성: {}", basePrompt);
+        return basePrompt;
     }
 }
