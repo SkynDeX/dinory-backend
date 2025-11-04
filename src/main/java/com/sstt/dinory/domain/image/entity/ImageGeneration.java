@@ -31,7 +31,8 @@ public class ImageGeneration {
     @Column(length = 50)
     private String status; // pending, completed, failed
 
-    @Column(name = "image_url", length = 500)
+    // [2025-11-03 김광현] 길이 500 -> TEXT로 변환
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
