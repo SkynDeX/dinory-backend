@@ -188,7 +188,7 @@ public class StoryService {
         CompletableFuture.runAsync(() -> {
             try {
                 // 현재 트랜잭션이 커밋될 때까지 잠시 대기
-                Thread.sleep(500);
+                Thread.sleep(100);
 
                 log.info("== 비동기 이미지 생성 시작 : sceneNumber=1, storyId={} ==", storyId);
 
@@ -495,7 +495,7 @@ public class StoryService {
         CompletableFuture.runAsync(() -> {
             try {
                 // 현재 트랜잭션이 커밋될 때까지 잠시 대기
-                Thread.sleep(500);
+                Thread.sleep(100);
 
                 log.info("=== 비동기 이미지 생성 시작: sceneNumber={}, storyId={} ===", finalSceneNumber, storyId);
 
@@ -841,7 +841,7 @@ public class StoryService {
             // FastAPI 서버에 프롬프트 생성 요청
             Map<String, Object> request = new HashMap<>();
             request.put("koreanText", koreanText);
-            request.put("maxLength", 100);  // 최대 100자로 제한
+            request.put("maxLength", 70);  // 최대 70자로 제한
 
             log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
 
