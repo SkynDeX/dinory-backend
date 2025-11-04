@@ -38,7 +38,7 @@ public class Scene {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;  // 씬 내용 텍스트
 
-    @Column(name = "image_url", length = 500)
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;  // 생성된 이미지 URL
 
     @Column(name = "image_prompt", columnDefinition = "TEXT")

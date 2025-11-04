@@ -15,6 +15,11 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import com.sstt.dinory.domain.child.entity.Child;
 import com.sstt.dinory.domain.child.repository.ChildRepository;
+import com.sstt.dinory.domain.image.dto.ImageGenerationRequest;
+import com.sstt.dinory.domain.image.dto.ImageGenerationResponse;
+import com.sstt.dinory.domain.image.entity.ImageGeneration;
+import com.sstt.dinory.domain.image.repository.ImageGenerationRepository;
+import com.sstt.dinory.domain.image.service.ImageService;
 import com.sstt.dinory.domain.story.dto.StoryChoiceRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompleteRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompletionSummaryDto;
@@ -44,6 +49,8 @@ public class StoryService {
     private final SceneRepository sceneRepository;
     private final ChoiceRepository choiceRepository;
     private final EntityManager entityManager;
+    private final ImageService imageService;
+    private final ImageGenerationRepository imageGenerationRepository;
 
 
     @Value("${ai.server.url:http://localhost:8000}")
@@ -116,33 +123,37 @@ public class StoryService {
             }
         }
 
-        // ai가 storyTitle을 생성을 안하면 첫번째 씬으로 생성
-        if(finalTitle.equals("동화 생성중...") && firstSceneResponse.containsKey("scene")) {
+        story.setTitle(finalTitle);
+
+        // [2025-11-03 김광현] Pinecone에서 가져온 description 업데이트
+        // Pinecone 검색 결과에서 description을 가져와야 하는데, 현재는 없음
+        // 일단 AI가 생성한 첫 씬 내용을 description으로 사용
+        if (firstSceneResponse.containsKey("scene")) {
             Map<String, Object> sceneData = (Map<String, Object>) firstSceneResponse.get("scene");
             String sceneContent = null;
-
-            if(sceneData.containsKey("content")) {
+            
+            if (sceneData.containsKey("content")) {
                 sceneContent = (String) sceneData.get("content");
-            } else if (sceneData.containsKey(("text"))) {
+            } else if (sceneData.containsKey("text")) {
                 sceneContent = (String) sceneData.get("text");
             }
-
-            // 첫 30자를 제목으로 사용
-            if(sceneContent != null && !sceneContent.isBlank()) {
-                finalTitle = sceneContent.length() > 30 
-                    ? sceneContent.substring(0, 30) + "..." 
+            
+            if (sceneContent != null && !sceneContent.isBlank()) {
+                // 첫 씬 내용을 description으로 사용 (100자 정도)
+                String description = sceneContent.length() > 100 
+                    ? sceneContent.substring(0, 100) + "..." 
                     : sceneContent;
-                log.info("첫 번째 씬 내용 기반 제목 생성: {}", finalTitle);
+                story.setDescription(description);
+                log.info("Story description 업데이트: {}", description);
             }
-
         }
-        story.setTitle(finalTitle);
 
         // 감정 기반 카테고리 설정
         String category = mapEmotionToCategory(request.getEmotion());
         story.setCategory(category);
         storyRepository.save(story);
-        log.info("Story 업데이트 완료 - title: {}, category: {}", story.getTitle(), category);
+        log.info("Story 업데이트 완료 - title: {}, description: {}, category: {}", 
+            story.getTitle(), story.getDescription(), category);
 
         // [2025-10-28 김민중 수정] emotion 저장 -> [2025-10-29 김광현] 위치 변경 AI응답성공해야만 DB에 저장
         StoryCompletion completion = StoryCompletion.builder()
@@ -159,12 +170,23 @@ public class StoryService {
 
 
 
-        saveSceneOnly(story, firstSceneResponse, 1);
+        saveSceneWithImage(story, firstSceneResponse, 1);
+
+        // [2025-11-03 김광현] 저장된 Scene에서 imageUrl 가져오기
+        Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, 1)
+                                        .orElse(null);
 
         Map<String, Object> response = new HashMap<>(firstSceneResponse);
         response.put("completionId", completion.getId());
         response.put("storyId", story.getId());  // [2025-10-29 김광현] 변경
         response.put("pineconeId", story.getPineconeId());  // [2025-10-29 김광현] 추가
+
+        // [2025-11-03 김광현] imageUrl 추가
+        if(savedScene != null && savedScene.getImageUrl() != null) {
+            response.put("imageUrl", savedScene.getImageUrl());
+            log.info("응답에 imageUrl 추가: {}", 
+                        savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+        }
         return response;
     }
 
@@ -267,68 +289,7 @@ public class StoryService {
         storyCompletionRepository.save(completion);
     }
 
-    // @Transactional(propagation = Propagation.REQUIRES_NEW)
-    // public Story getOrCreateStory(String pineconeId) {
-    //     return storyRepository.findByPineconeId(pineconeId).orElseGet(() -> {
-
-    //         // [2025-10-29 김광현] sql 에러 방지
-    //         Optional<Story> existing = storyRepository.findByPineconeId(pineconeId);
-    //         if(existing.isPresent()) {
-    //             log.info("기존 Story 재사용: pineconeId={}, storyId={}\", pineconeId, existing.get().getId()");
-    //             return existing.get();
-    //         }
-
-    //         // 없으면 생성
-    //         Story newStory = Story.builder()
-    //             .pineconeId(pineconeId)
-    //             .title("동화 생성중...")
-    //             .category("미분류")
-    //             .description("AI가 동화를 생성중입니다.")
-    //             .build();
-
-    //         try {
-    //             Story saved = storyRepository.save(newStory);
-    //             log.info("새로운 story 생성: pineconeId={}, storyId={}", pineconeId, saved.getId()); 
-    //             return saved;
-
-    //         } catch (Exception e) {
-    //             // [2025-10-29 김광현] 동시성 문제에서 insert시 다시 조회
-    //             // UNIQUE 제약조건 위반 (동시성 문제로 다른 트랜잭션에서 이미 생성)
-    //             log.warn("동시성 문제로 Story 중복 생성 시도 감지: pineconeId={}", pineconeId);
-
-    //             // 실패한 엔티티 세션 제거(Hibernate 세션 정리)
-    //             entityManager.clear();
-
-    //             // 대기 후 재시도하기
-    //             try {
-    //                 Thread.sleep(100);
-    //             } catch (InterruptedException ie) {
-    //                 Thread.currentThread().interrupt();
-    //             }
-
-    //             // 다시 시도 (3번시도)
-    //             for (int i = 0; i < 3; i++) {
-    //                 Optional<Story> retryResult = storyRepository.findByPineconeId(pineconeId);
-    //                 if(retryResult.isPresent()) {
-    //                     log.info("재시도 {}번째 성공 : pineconeId={}", i + 1, pineconeId );
-    //                     return retryResult.get();
-    //                 }
-
-    //                 // 재시도 대기
-    //                 try {
-    //                     Thread.sleep(50 * (i +1));
-    //                 } catch (InterruptedException ie) {
-    //                     Thread.currentThread().interrupt();
-    //                 }
-    //             }
-                
-    //             throw new RuntimeException("Story 조회 실패(재시도 3번 실패):" + pineconeId);
-    //             // 다시 조회 (다른 트랜잭션에서 생성된 것 사용)
-    //             // return storyRepository.findByPineconeId(pineconeId)
-    //             //     .orElseThrow(() -> new RuntimeException("Story 조회 실패: " + pineconeId));
-    //         }
-    //     });
-    // }
+    
     @Transactional(propagation = Propagation.REQUIRES_NEW,
                     isolation = Isolation.READ_COMMITTED)
     public Story getOrCreateStory(String pineconeId) {
@@ -441,35 +402,118 @@ public class StoryService {
             .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
             .block();
 
-        saveSceneOnly(story, aiResponse, nextSceneNumber);
+        saveSceneWithImage(story, aiResponse, nextSceneNumber);
+
+        // [2025-11-03 김광현] 저장된 Scene에서 imageUrl 가져오기
+        Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, nextSceneNumber)
+            .orElse(null);
+
+        // [2025-11-03 김광현] imageUrl을 응답에 추가
+        if (savedScene != null && savedScene.getImageUrl() != null) {
+            aiResponse.put("imageUrl", savedScene.getImageUrl());
+            log.info("응답에 imageUrl 추가: {}", savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+        }
+
+        // 디버깅: 응답 전체 출력
+        log.info("=== generateNextScene 최종 응답 ===");
+        log.info("response keys: {}", aiResponse.keySet());
+        log.info("imageUrl in response: {}", aiResponse.get("imageUrl"));
+
         return aiResponse;
     }
 
-    /** AI 응답으로 Scene만 저장 */
-    private void saveSceneOnly(Story story, Map<String, Object> aiResponse, int sceneNumber) {
+    /** [2025-11-03 김광현] AI 응답으로 Scene 저장 + 이미지 생성/캐싱 */
+    private void saveSceneWithImage(Story story, Map<String, Object> aiResponse, int sceneNumber) {
+        log.info("=== saveSceneWithImage 호출됨: sceneNumber={} ===", sceneNumber);
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> sceneData = (Map<String, Object>) aiResponse.get("scene");
-            if (sceneData == null) return;
+            if (sceneData == null) {
+                return;
+            }
 
-            if (sceneRepository.findByStoryAndSceneNumber(story, sceneNumber).isPresent()) return;
+            // [2025-11-03 김광현] Scene이 이미 존재하는지 확인
+            Optional<Scene> existingSceneOpt = sceneRepository.findByStoryAndSceneNumber(story, sceneNumber);
+            Scene scene;
+            
+            if (existingSceneOpt.isPresent()) {
+                scene = existingSceneOpt.get();
+                log.info("Scene이 이미 존재함: sceneNumber={}, sceneId={}", sceneNumber, scene.getId());
+            } else {
+                // Scene 생성
+                String content = (String) sceneData.get("text");
+                if (content == null) {
+                    content = (String) sceneData.get("content");
+                }
+                if (content == null) {
+                    content = "";
+                }
 
-            String content = (String) sceneData.get("text");
-            if (content == null) content = (String) sceneData.get("content");
-            if (content == null) content = "";
+                scene = Scene.builder()
+                        .story(story)
+                        .sceneNumber(sceneNumber)
+                        .content(content)
+                        .imageUrl(null)
+                        .imagePrompt(null)
+                        .build();
+                
+                scene = sceneRepository.save(scene);
+                log.info("Scene 생성 완료: sceneNumber={}, sceneId={}", sceneNumber, scene.getId());
+            }
 
-            Scene scene = Scene.builder()
-                .story(story)
-                .sceneNumber(sceneNumber)
-                .content(content)
-                .imageUrl(null)
-                .imagePrompt(null)
-                .build();
-            sceneRepository.save(scene);
+            // [2025-11-03 김광현] 이미지가 없으면 생성 또는 캐시에서 가져오기
+            if (scene.getImageUrl() == null && !scene.getContent().isEmpty()) {
+                try {
+                    // 영어 프롬프트 생성
+                    String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
+                    log.info("씬 {} 이미지 프롬프트: {}", sceneNumber, imagePrompt);
+                    
+                    // [2025-11-03 김광현] 동일한 프롬프트로 생성된 이미지가 있는지 확인
+                    Optional<ImageGeneration> cachedImage = imageGenerationRepository
+                        .findFirstByPromptAndStatusOrderByCompletedAtDesc(imagePrompt, "completed");
+                    
+                    if (cachedImage.isPresent() && cachedImage.get().getImageUrl() != null) {
+                        // 캐시된 이미지 사용
+                        String cachedUrl = cachedImage.get().getImageUrl();
+                        scene.setImageUrl(cachedUrl);
+                        scene.setImagePrompt(imagePrompt);
+                        sceneRepository.save(scene);
+                        log.info("씬 {} 캐시된 이미지 사용: {}", sceneNumber, 
+                            cachedUrl.substring(0, Math.min(80, cachedUrl.length())));
+                    } else {
+                        // 새로 이미지 생성
+                        log.info("씬 {} 이미지 생성 시작...", sceneNumber);
+                        
+                        ImageGenerationRequest imageRequest = ImageGenerationRequest.builder()
+                            .sceneId(scene.getId())
+                            .prompt(imagePrompt)
+                            .style("fantasy-art")
+                            .build();
+                        
+                        ImageGenerationResponse imageResponse = imageService.generateImage(imageRequest);
+                        
+                        if ("completed".equals(imageResponse.getStatus()) && imageResponse.getImageUrl() != null) {
+                            scene.setImageUrl(imageResponse.getImageUrl());
+                            scene.setImagePrompt(imagePrompt);
+                            sceneRepository.save(scene);
+                            log.info("씬 {} 이미지 생성 완료: {}", sceneNumber, 
+                                imageResponse.getImageUrl().substring(0, Math.min(80, imageResponse.getImageUrl().length())));
+                        } else {
+                            log.warn("씬 {} 이미지 생성 실패: status={}", sceneNumber, imageResponse.getStatus());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("씬 {} 이미지 생성/캐싱 실패 (Scene은 저장됨): {}", sceneNumber, e.getMessage());
+                }
+            } else if (scene.getImageUrl() != null) {
+                log.info("씬 {} 이미지가 이미 존재함", sceneNumber);
+            }
+
         } catch (Exception e) {
             log.error("Scene 저장 오류: {}", e.getMessage(), e);
         }
     }
+
 
     /** 커스텀 선택지 분석 */
     public Map<String, Object> analyzeCustomChoice(Long completionId, Integer sceneNumber, String text) {
@@ -493,5 +537,98 @@ public class StoryService {
 
         log.info("AI 분석 응답: {}", aiResponse);
         return aiResponse;
+    }
+
+    // 완성된 동화 전체 조회(다시보기용)
+    @Transactional(readOnly = true)
+    public Map<String, Object> getFullStory(Long completionId) {
+        // StoryCompletion 조회
+        StoryCompletion completion = storyCompletionRepository.findById(completionId)
+            .orElseThrow(() -> new RuntimeException("StoryCompletion 없음: " + completionId));
+
+        // 동화가 완료 되지 않으면 조회 불가
+        if(completion.getCompletedAt() == null) {
+            throw new RuntimeException("완료되지 않은 동화입니다!: " + completionId);
+        }
+
+        Story story = completion.getStory();
+
+        // 모든 씬 조회
+        List<Scene> scenes = sceneRepository.findByStoryOrderBySceneNumber(story);
+        
+        //  각 씬 선택지 조회
+        List<Map<String, Object>> sceneDataList = new ArrayList<>();
+        for (Scene scene : scenes) {
+            Map<String, Object> sceneData = new HashMap<>();
+            sceneData.put("sceneNumber", scene.getSceneNumber());
+            sceneData.put("content", scene.getContent());
+            sceneData.put("imageUrl", scene.getImageUrl());
+            sceneData.put("imagePrompt", scene.getImagePrompt());
+
+            // 해당 씬 모든 선택지 조회
+            List<Choice> choices = choiceRepository.findByScene(scene);
+            List<Map<String, Object>> choiceDataList = new ArrayList<>();
+
+            for(Choice choice: choices) {
+                Map<String, Object> choiceData = new HashMap<>();
+                choiceData.put("id", choice.getId());
+                choiceData.put("text", choice.getChoiceText());
+                choiceData.put("abilityType", choice.getAbilityType());
+                choiceData.put("abilityPoints", choice.getAbilityPoints());
+                choiceDataList.add(choiceData);
+            }
+
+            sceneData.put("choices", choiceDataList);
+
+            // 사용자가 선택한 선택지 찾기
+            String selectedChoiceText = null;
+            for(StoryCompletion.ChoiceRecord record : completion.getChoicesJson()) {
+                if(record.getSceneNumber().equals(scene.getSceneNumber())) {
+                    selectedChoiceText = record.getChoiceText();
+                    break;
+                }
+            }
+
+            sceneData.put("selectedChoiceText", selectedChoiceText);
+
+            sceneDataList.add(sceneData);
+        }
+        // 5. 응답 구성
+        Map<String, Object> response = new HashMap<>();
+        response.put("completionId", completion.getId());
+        response.put("storyTitle", completion.getStoryTitle());
+        response.put("emotion", completion.getEmotion());
+        response.put("interests", completion.getInterests());
+        response.put("totalTime", completion.getTotalTime());
+        response.put("completedAt", completion.getCompletedAt());
+        response.put("scenes", sceneDataList);
+        response.put("totalAbilityScore", completion.getAbilityScore());
+
+        return response;
+    }
+
+    /**
+     * [2025-11-03 김광현] 한글 동화 내용을 이미지 프롬프트로 준비
+     * 실제 영어 변환 및 처리는 ImageService에서 담당
+     */
+    private String translateToEnglishImagePrompt(String koreanText) {
+        try {
+            // 동화 내용을 적절한 길이로 축약 (URL 길이 제한 고려)
+            int maxLength = 80;  // 한글 80자 정도면 URL 인코딩 후 약 240자
+            String shortText = koreanText.length() > maxLength 
+                ? koreanText.substring(0, maxLength) + "..." 
+                : koreanText;
+            
+            // 스타일 키워드 추가 (영어)
+            String prompt = "children's book illustration, " + shortText;
+            
+            log.info("프롬프트 준비: {}자 → {}자", koreanText.length(), prompt.length());
+            
+            return prompt;
+            
+        } catch (Exception e) {
+            log.error("프롬프트 준비 실패: {}", e.getMessage());
+            return "children's book illustration, fairy tale scene";
+        }
     }
 }

@@ -217,7 +217,20 @@ public class StoryController {
                 "message", e.getMessage()
             ));
         }
-    }   
+    }
+
+    // 완성된 동화 전체 조회 - 다시보기
+    @GetMapping("/completion/{completionId}/full-story")
+    public ResponseEntity<Map<String, Object>> getFullStory(
+        @PathVariable Long completionId
+    ){
+        log.info("==== 완성 된 동화 조회(다시보기용) ====");
+        log.info("completionId: {}" , completionId);
+
+        Map<String, Object> fullStory = storyService.getFullStory(completionId);
+
+        return ResponseEntity.ok(fullStory);
+    }
 
 
     // 헬스체크용
