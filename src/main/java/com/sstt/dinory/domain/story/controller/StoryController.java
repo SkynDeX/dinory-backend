@@ -3,6 +3,7 @@ package com.sstt.dinory.domain.story.controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.PageRequest;
@@ -15,7 +16,9 @@ import com.sstt.dinory.domain.story.dto.StoryChoiceRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompleteRequest;
 import com.sstt.dinory.domain.story.dto.StoryCompletionSummaryDto;
 import com.sstt.dinory.domain.story.dto.StoryGenerateRequest;
+import com.sstt.dinory.domain.story.entity.Scene;
 import com.sstt.dinory.domain.story.entity.StoryCompletion;
+import com.sstt.dinory.domain.story.repository.SceneRepository;
 import com.sstt.dinory.domain.story.repository.StoryCompletionRepository;
 import com.sstt.dinory.domain.story.service.StoryRecommendationService;
 import com.sstt.dinory.domain.story.service.StoryService;
@@ -36,6 +39,7 @@ public class StoryController {
     private final StoryRecommendationService recommendationService;
     private final StoryService storyService;
     private final StoryCompletionRepository storyCompletionRepository;
+    private  final SceneRepository sceneRepository;
 
     // 동화추천
     @PostMapping("/recommended")
@@ -217,7 +221,27 @@ public class StoryController {
                 "message", e.getMessage()
             ));
         }
-    }   
+    }
+
+    @GetMapping("/scene/{sceneId}/image")
+    public ResponseEntity<Map<String, Object>> getSceneImage(
+            @PathVariable Long sceneId
+    ) {
+        log.info("씬 이미지 조회: sceneId={}", sceneId);
+
+        Optional<Scene> sceneOpt = sceneRepository.findById(sceneId);
+        if (sceneOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Scene scene = sceneOpt.get();
+        Map<String, Object> response = new HashMap<>();
+        response.put("sceneId", sceneId);
+        response.put("imageUrl", scene.getImageUrl());
+        response.put("imagePrompt", scene.getImagePrompt());
+
+        return ResponseEntity.ok(response);
+    }
 
 
     // 헬스체크용

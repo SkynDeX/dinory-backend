@@ -98,8 +98,11 @@ public class ImageService {
             }
 
             String encodedPrompt = java.net.URLEncoder.encode(fullPrompt, "UTF-8");
+            // [2025-11-04 김광현] 이미지 크기 수정
             String imageUrl = "https://image.pollinations.ai/prompt/" + encodedPrompt +
-                "?width=1024&height=1024&nologo=true&enhance=true";
+                "?width=1024&height=768&nologo=true";
+            // String imageUrl = "https://image.pollinations.ai/prompt/" + encodedPrompt +
+            //     "?width=1024&height=1024&nologo=true&enhance=true";
 
             log.info("Pollinations AI 프롬프트: {}", fullPrompt);
             return imageUrl;

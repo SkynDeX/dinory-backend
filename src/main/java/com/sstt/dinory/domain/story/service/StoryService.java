@@ -3,6 +3,7 @@ package com.sstt.dinory.domain.story.service;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -38,6 +39,8 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.swing.text.html.Option;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -60,7 +63,7 @@ public class StoryService {
     /** 첫 번째 씬 생성 */
     @Transactional
     public Map<String, Object> generateStory(StoryGenerateRequest request) {
-        // childId 필수 검증
+        // [2025-11-04 김민중 수정] childId 필수 검증 추가
         if (request.getChildId() == null) {
             throw new IllegalArgumentException("childId는 필수입니다. 프론트에서 childId를 전송해주세요.");
         }
@@ -175,8 +178,30 @@ public class StoryService {
         log.info("[StoryCompletion] AI 응답성공 후 저장완료 : completionId={}, completionTitle={}", completion.getId(), completion.getStoryTitle());
 
 
+        // [2025-11-04 김광현] Scene 먼저 저장 후 이미지 비동기로 진행 화면 렌더링 속도 잡기
+        // saveSceneWithImage(story, firstSceneResponse, 1);
+        // 이미지 없이 Scene 먼저 저장
+        saveSceneTextOnly(story, firstSceneResponse, 1);
 
-        saveSceneWithImage(story, firstSceneResponse, 1);
+        // 이미지 비동기 생성
+        final Long storyId = story.getId();
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 현재 트랜잭션이 커밋될 때까지 잠시 대기
+                Thread.sleep(500);
+
+                log.info("== 비동기 이미지 생성 시작 : sceneNumber=1, storyId={} ==", storyId);
+
+                // Story를 다시 조회 (새로운 트랜잭션)
+                Story freshStory = storyRepository.findById(storyId)
+                                .orElseThrow(() -> new RuntimeException("Story not found: " + storyId));
+
+                generateImageForScene(freshStory, 1);
+
+            } catch(Exception e) {
+                log.warn("비동기 이미지 생성 실패(Scene은 저장완료): {}", e.getMessage(), e);
+            }
+        });
 
         // [2025-11-03 김광현] 저장된 Scene에서 imageUrl 가져오기
         Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, 1)
@@ -188,10 +213,27 @@ public class StoryService {
         response.put("pineconeId", story.getPineconeId());  // [2025-10-29 김광현] 추가
 
         // [2025-11-03 김광현] imageUrl 추가
-        if(savedScene != null && savedScene.getImageUrl() != null) {
-            response.put("imageUrl", savedScene.getImageUrl());
-            log.info("응답에 imageUrl 추가: {}", 
+//        if(savedScene != null && savedScene.getImageUrl() != null) {
+//            response.put("imageUrl", savedScene.getImageUrl());
+//            log.info("응답에 imageUrl 추가: {}",
+//                        savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+//        }
+        // [2025-11-04 김광현] scene 객체에 sceneId 추가
+        if (savedScene != null) {
+            // scene 객체 가져오기
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sceneData = (Map<String, Object>) response.get("scene");
+            if (sceneData != null) {
+                sceneData.put("sceneId", savedScene.getId());
+                log.info("scene에 sceneId 추가: {}", savedScene.getId());
+            }
+
+            // imageUrl 추가
+            if (savedScene.getImageUrl() != null) {
+                response.put("imageUrl", savedScene.getImageUrl());
+                log.info("응답에 imageUrl 추가: {}",
                         savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+            }
         }
         return response;
     }
@@ -442,22 +484,53 @@ public class StoryService {
             .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
             .block();
 
-        saveSceneWithImage(story, aiResponse, nextSceneNumber);
+        saveSceneTextOnly(story, aiResponse, nextSceneNumber);
 
         // [2025-11-03 김광현] 저장된 Scene에서 imageUrl 가져오기
-        Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, nextSceneNumber)
-            .orElse(null);
+        //  Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, nextSceneNumber)
+        //    .orElse(null);
+        // [2025-11-04 김광현] 이미지는 비동기로
+        final Long storyId = story.getId();
+        final int finalSceneNumber = nextSceneNumber;
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 현재 트랜잭션이 커밋될 때까지 잠시 대기
+                Thread.sleep(500);
+
+                log.info("=== 비동기 이미지 생성 시작: sceneNumber={}, storyId={} ===", finalSceneNumber, storyId);
+
+                // Story를 다시 조회 (새로운 트랜잭션)
+                Story freshStory = storyRepository.findById(storyId)
+                        .orElseThrow(() -> new RuntimeException("Story not found: " + storyId));
+
+                generateImageForScene(freshStory, finalSceneNumber);
+            } catch (Exception e) {
+                log.warn("비동기 이미지 생성 실패 (Scene은 저장됨): {}", e.getMessage(), e);
+            }
+        });
 
         // [2025-11-03 김광현] imageUrl을 응답에 추가
-        if (savedScene != null && savedScene.getImageUrl() != null) {
-            aiResponse.put("imageUrl", savedScene.getImageUrl());
-            log.info("응답에 imageUrl 추가: {}", savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+//        if (savedScene != null && savedScene.getImageUrl() != null) {
+//            aiResponse.put("imageUrl", savedScene.getImageUrl());
+//            log.info("응답에 imageUrl 추가: {}", savedScene.getImageUrl().substring(0, Math.min(80, savedScene.getImageUrl().length())));
+//        }
+        // [2025-11-04 김광현] 저장된 Scene에서 sceneId 가져오기
+        Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, nextSceneNumber)
+                .orElse(null);
+
+        // scene 객체에 sceneId 추가
+        if (savedScene != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sceneData = (Map<String, Object>) aiResponse.get("scene");
+            if (sceneData != null) {
+                sceneData.put("sceneId", savedScene.getId());
+                log.info("scene에 sceneId 추가: {}", savedScene.getId());
+            }
         }
 
-        // 디버깅: 응답 전체 출력
-        log.info("=== generateNextScene 최종 응답 ===");
-        log.info("response keys: {}", aiResponse.keySet());
-        log.info("imageUrl in response: {}", aiResponse.get("imageUrl"));
+        // 즉시 응답 반환 (imageUrl 없이)
+        aiResponse.put("imageUrl", null);
+        log.info("다음 장면 응답 반환 (이미지는 백그라운드 생성 중)");
 
         return aiResponse;
     }
@@ -502,7 +575,7 @@ public class StoryService {
             }
 
             // [2025-11-03 김광현] 이미지가 없으면 생성 또는 캐시에서 가져오기
-            if (scene.getImageUrl() == null && !scene.getContent().isEmpty() && scene.getId() != null) {
+            if (scene.getImageUrl() == null && !scene.getContent().isEmpty()) {
                 try {
                     // 영어 프롬프트 생성
                     String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
@@ -527,7 +600,7 @@ public class StoryService {
                         ImageGenerationRequest imageRequest = ImageGenerationRequest.builder()
                             .sceneId(scene.getId())
                             .prompt(imagePrompt)
-                            .style("fantasy-arT")
+                            .style("fantasy-art")
                             .build();
                         
                         ImageGenerationResponse imageResponse = imageService.generateImage(imageRequest);
@@ -551,6 +624,112 @@ public class StoryService {
 
         } catch (Exception e) {
             log.error("Scene 저장 오류: {}", e.getMessage(), e);
+        }
+    }
+
+    // Scene 텍스트 번저 저장(이미지는 나중에)
+    private void saveSceneTextOnly(Story story, Map<String, Object> aiResponse, int sceneNumber) {
+        log.info("=== saveSceneTextOnly 호출: sceneNumber={} ===", sceneNumber);
+        try {
+            @SuppressWarnings("unchecked")
+                    Map<String, Object> sceneData = (Map<String, Object>) aiResponse.get("scene");
+            if(sceneData == null) {
+                log.warn("scene 데이터가 없음");
+                return;
+            }
+
+            // scene이 이미 존재하는지 확인
+            Optional<Scene> existingSceneOpt = sceneRepository.findByStoryAndSceneNumber(story, sceneNumber);
+
+            if(existingSceneOpt.isPresent()) {
+                log.info("Scene이 이미 존재함: sceneNumber={}", sceneNumber);
+                return;
+            }
+
+            // Scene 텍스트 추출
+            String content = (String) sceneData.get("text");
+            if(content == null) {
+                content = (String) sceneData.get("content");
+            }
+
+            if (content == null) {
+                content = "";
+            }
+
+            // Scene 생성(이미지 없이)
+            Scene scene = Scene.builder()
+                    .story(story)
+                    .sceneNumber(sceneNumber)
+                    .content(content)
+                    .imageUrl(null)
+                    .imagePrompt(null)
+                    .build();
+
+            sceneRepository.save(scene);
+            log.info("Scene 텍스트 저장 완료: sceneNumber={}, sceneId={}", sceneNumber, scene.getId());
+        } catch (Exception e) {
+            log.error("Scene 텍스트 저장 오류: {}", e.getMessage(), e);
+        }
+    }
+
+    /** 저장된 Scene에 이미지만 추가 */
+    private void generateImageForScene(Story story, int sceneNumber) {
+        log.info("=== generateImageForScene 호출: sceneNumber={} ===", sceneNumber);
+        try {
+            // Scene 조회
+            Scene scene = sceneRepository.findByStoryAndSceneNumber(story, sceneNumber)
+                    .orElseThrow(() -> new RuntimeException("Scene 없음: sceneNumber=" + sceneNumber));
+
+            // 이미지가 이미 있으면 스킵
+            if (scene.getImageUrl() != null) {
+                log.info("씬 {} 이미지가 이미 존재함", sceneNumber);
+                return;
+            }
+
+            // 이미지가 없으면 생성
+            if (!scene.getContent().isEmpty()) {
+                // 영어 프롬프트 생성
+                String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
+                log.info("씬 {} 이미지 프롬프트: {}", sceneNumber, imagePrompt);
+
+                // 캐시 확인
+                Optional<ImageGeneration> cachedImage = imageGenerationRepository
+                        .findFirstByPromptAndStatusOrderByCompletedAtDesc(imagePrompt, "completed");
+
+                if (cachedImage.isPresent() && cachedImage.get().getImageUrl() != null) {
+                    // 캐시된 이미지 사용
+                    String cachedUrl = cachedImage.get().getImageUrl();
+                    scene.setImageUrl(cachedUrl);
+                    scene.setImagePrompt(imagePrompt);
+                    sceneRepository.save(scene);
+                    log.info("씬 {} 캐시된 이미지 사용: {}", sceneNumber,
+                            cachedUrl.substring(0, Math.min(80, cachedUrl.length())));
+                } else {
+                    // 새로 이미지 생성
+                    log.info("씬 {} 이미지 생성 시작...", sceneNumber);
+
+                    ImageGenerationRequest imageRequest = ImageGenerationRequest.builder()
+                            .sceneId(scene.getId())
+                            .prompt(imagePrompt)
+                            .style("fantasy-art")
+                            .build();
+
+                    ImageGenerationResponse imageResponse = imageService.generateImage(imageRequest);
+
+                    if ("completed".equals(imageResponse.getStatus()) && imageResponse.getImageUrl() != null) {
+                        scene.setImageUrl(imageResponse.getImageUrl());
+                        scene.setImagePrompt(imagePrompt);
+                        sceneRepository.save(scene);
+                        log.info("씬 {} 이미지 생성 완료: {}", sceneNumber,
+                                imageResponse.getImageUrl().substring(0, Math.min(80, imageResponse.getImageUrl().length())));
+                    } else {
+                        log.warn("씬 {} 이미지 생성 실패: status={}", sceneNumber, imageResponse.getStatus());
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("씬 {} 이미지 생성 실패: {}", sceneNumber, e.getMessage(), e);
         }
     }
 
@@ -662,7 +841,7 @@ public class StoryService {
             // FastAPI 서버에 프롬프트 생성 요청
             Map<String, Object> request = new HashMap<>();
             request.put("koreanText", koreanText);
-            request.put("maxLength", 150);  // 최대 150자로 제한
+            request.put("maxLength", 100);  // 최대 100자로 제한
 
             log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
 
