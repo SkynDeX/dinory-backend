@@ -59,7 +59,7 @@ public class StoryService {
     /** 첫 번째 씬 생성 */
     @Transactional
     public Map<String, Object> generateStory(StoryGenerateRequest request) {
-        // [2025-11-04 김민중 수정] childId 필수 검증 추가
+        // childId 필수 검증
         if (request.getChildId() == null) {
             throw new IllegalArgumentException("childId는 필수입니다. 프론트에서 childId를 전송해주세요.");
         }
@@ -492,7 +492,7 @@ public class StoryService {
                         ImageGenerationRequest imageRequest = ImageGenerationRequest.builder()
                             .sceneId(scene.getId())
                             .prompt(imagePrompt)
-                            .style("fantasy-art")
+                            .style("fantasy-arT")
                             .build();
                         
                         ImageGenerationResponse imageResponse = imageService.generateImage(imageRequest);
@@ -613,7 +613,7 @@ public class StoryService {
     }
 
     /**
-     * [2025-11-04 수정] 한글 동화 내용을 AI 서버에서 영어 이미지 프롬프트로 변환
+     * [2025-11-04 김민중 수정] 한글 동화 내용을 AI 서버에서 영어 이미지 프롬프트로 변환
      * FastAPI 서버의 /ai/create-image-prompt를 호출하여 핵심 시각적 요소만 추출
      */
     private String translateToEnglishImagePrompt(String koreanText) {
@@ -665,7 +665,7 @@ public class StoryService {
     }
 
     /**
-     * [2025-11-04 추가] 폴백 프롬프트 생성
+     * [2025-11-04 김민중 추가] 폴백 프롬프트 생성11
      */
     private String createFallbackPrompt(String koreanText) {
         // 간단한 키워드 추출 (한글 동화에서 명사/동사 감지)

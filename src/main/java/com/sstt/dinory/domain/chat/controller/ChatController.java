@@ -5,6 +5,8 @@ import com.sstt.dinory.domain.chat.dto.ChatInitRequest;
 import com.sstt.dinory.domain.chat.dto.ChatMessageDto;
 import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
+import com.sstt.dinory.domain.chat.dto.GenerateChoicesRequest;
+import com.sstt.dinory.domain.chat.dto.GenerateChoicesResponse;
 import com.sstt.dinory.domain.chat.entity.ChatMessage;
 import com.sstt.dinory.domain.chat.repository.ChatMessageRepository;
 import com.sstt.dinory.domain.chat.service.ChatService;
@@ -84,5 +86,14 @@ public class ChatController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(dtos);
+    }
+
+    /**
+     * [2025-11-04 김민중 추가] AI 기반 동적 선택지 생성
+     */
+    @PostMapping("/generate-choices")
+    public ResponseEntity<GenerateChoicesResponse> generateChoices(@RequestBody GenerateChoicesRequest request) {
+        GenerateChoicesResponse response = chatService.generateChoices(request);
+        return ResponseEntity.ok(response);
     }
 }

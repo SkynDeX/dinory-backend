@@ -4,6 +4,8 @@ import com.sstt.dinory.domain.chat.dto.ChatInitFromStoryRequest;
 import com.sstt.dinory.domain.chat.dto.ChatInitRequest;
 import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
+import com.sstt.dinory.domain.chat.dto.GenerateChoicesRequest;
+import com.sstt.dinory.domain.chat.dto.GenerateChoicesResponse;
 import com.sstt.dinory.domain.chat.entity.ChatMessage;
 import com.sstt.dinory.domain.chat.entity.ChatSession;
 import com.sstt.dinory.domain.chat.repository.ChatMessageRepository;
@@ -268,6 +270,61 @@ public class ChatService {
             // AI 서버 실패 시 기본 메시지 반환
             return String.format("%s야, 동화 '%s' 어땠어? 이야기 들으면서 어떤 생각이 들었어?",
                                summary.getChildName(), summary.getStoryTitle());
+        }
+    }
+
+    /**
+     * [2025-11-04 김민중 추가] AI 기반 동적 선택지 생성
+     */
+    public GenerateChoicesResponse generateChoices(GenerateChoicesRequest request) {
+        try {
+            // AI 서버에 선택지 생성 요청
+            String url = aiServerUrl + "/api/chat/generate-choices";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            if (request.getSessionId() != null) {
+                requestBody.put("session_id", request.getSessionId().intValue());
+            }
+            if (request.getChildId() != null) {
+                requestBody.put("child_id", request.getChildId().intValue());
+            }
+            if (request.getLastMessage() != null) {
+                requestBody.put("last_message", request.getLastMessage());
+            }
+
+            log.info("Requesting dynamic choices from AI: {}", requestBody);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            Map<String, Object> response = restTemplate.postForObject(url, entity, Map.class);
+
+            if (response != null) {
+                List<String> choices = (List<String>) response.get("choices");
+                String emotion = (String) response.getOrDefault("emotion", "neutral");
+
+                log.info("AI generated choices: {}, emotion: {}", choices, emotion);
+
+                return GenerateChoicesResponse.builder()
+                        .choices(choices != null ? choices : List.of())
+                        .emotion(emotion)
+                        .build();
+            }
+
+            log.warn("No AI response for choices, using fallback");
+            return GenerateChoicesResponse.builder()
+                    .choices(List.of("더 알려줘", "다른 이야기"))
+                    .emotion("neutral")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to generate choices from AI: ", e);
+            return GenerateChoicesResponse.builder()
+                    .choices(List.of("더 알려줘", "다른 이야기"))
+                    .emotion("neutral")
+                    .build();
         }
     }
 
