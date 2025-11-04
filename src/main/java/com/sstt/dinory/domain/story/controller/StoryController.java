@@ -217,9 +217,16 @@ public class StoryController {
                 "message", e.getMessage()
             ));
         }
+    }   
+
+
+    // 헬스체크용
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Story Controller is working!");
     }
 
-    // 완성된 동화 전체 조회 - 다시보기
+      // 완성된 동화 전체 조회 - 다시보기
     @GetMapping("/completion/{completionId}/full-story")
     public ResponseEntity<Map<String, Object>> getFullStory(
         @PathVariable Long completionId
@@ -231,15 +238,9 @@ public class StoryController {
 
         return ResponseEntity.ok(fullStory);
     }
-
-
-    // 헬스체크용
-    @GetMapping("/health")
-    public ResponseEntity<String> health() {
-        return ResponseEntity.ok("Story Controller is working!");
-    }
-
+    
     /**
+     * 2025-11-04 김민중 추가
      * RAG: 특정 아이의 최근 동화 완료 기록 조회
      * FastAPI의 MemoryService가 호출
      */
