@@ -16,6 +16,7 @@ import com.sstt.dinory.domain.story.repository.StoryCompletionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -136,6 +137,15 @@ public class ChatService {
 
         chatMessageRepository.save(aiMessage);
 
+        // [2025-11-04 김민중 추가] Pinecone에 대화 동기화 (비동기, 실패해도 무시)
+        syncConversationToPinecone(
+                session.getId(),
+                session.getChildId(),
+                request.getMessage(),
+                aiResponse,
+                aiMessage.getId()
+        );
+
         // 전체 메시지 조회
         List<ChatMessage> allMessages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
 
@@ -160,36 +170,135 @@ public class ChatService {
         log.info("Chat session ended: {}", sessionId);
     }
 
+    /**
+     * [2025-11-04 김민중 수정] Pinecone 우선 조회, 실패 시 MySQL 사용
+     */
     public ChatResponseDto getChatSession(Long sessionId) {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
 
-        List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(sessionId);
+        List<ChatResponseDto.ChatMessageDto> messageDtos;
+
+        // Pinecone에서 대화 조회 시도
+        List<Map<String, Object>> pineconeConvs = getConversationHistoryFromPinecone(sessionId, 100);
+
+        if (!pineconeConvs.isEmpty()) {
+            log.info("✅ Pinecone에서 대화 조회 성공: {} 메시지", pineconeConvs.size());
+            messageDtos = pineconeConvs.stream()
+                    .flatMap(conv -> {
+                        // Pinecone은 대화 쌍(message + response)으로 저장됨
+                        java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
+
+                        // 사용자 메시지
+                        pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                .sender("USER")
+                                .message((String) conv.get("message"))
+                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                .build());
+
+                        // AI 응답
+                        pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                .sender("AI")
+                                .message((String) conv.get("response"))
+                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                .build());
+
+                        return pair.stream();
+                    })
+                    .collect(Collectors.toList());
+        } else {
+            // Fallback: MySQL에서 조회
+            log.warn("⚠️ Pinecone 조회 실패, MySQL 사용");
+            List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(sessionId);
+            messageDtos = convertToMessageDtos(messages);
+        }
 
         return ChatResponseDto.builder()
                 .sessionId(session.getId())
                 .childId(session.getChildId())
-                .messages(convertToMessageDtos(messages))
+                .messages(messageDtos)
                 .startedAt(session.getStartedAt())
                 .endedAt(session.getEndedAt())
                 .build();
     }
 
+    /**
+     * [2025-11-04 김민중 수정] Pinecone에서 아이별 대화 세션 조회
+     */
     public List<ChatResponseDto> getChatSessionsByChild(Long childId) {
         List<ChatSession> sessions = chatSessionRepository.findByChildIdOrderByStartedAtDesc(childId);
 
         return sessions.stream()
                 .map(session -> {
-                    List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
+                    List<ChatResponseDto.ChatMessageDto> messageDtos;
+
+                    // Pinecone에서 조회 시도
+                    List<Map<String, Object>> pineconeConvs = getConversationHistoryFromPinecone(session.getId(), 100);
+
+                    if (!pineconeConvs.isEmpty()) {
+                        log.debug("✅ Pinecone에서 세션 {} 조회 성공", session.getId());
+                        messageDtos = pineconeConvs.stream()
+                                .flatMap(conv -> {
+                                    java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
+
+                                    pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                            .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                            .sender("USER")
+                                            .message((String) conv.get("message"))
+                                            .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                            .build());
+
+                                    pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                            .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                            .sender("AI")
+                                            .message((String) conv.get("response"))
+                                            .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                            .build());
+
+                                    return pair.stream();
+                                })
+                                .collect(Collectors.toList());
+                    } else {
+                        // Fallback: MySQL 사용
+                        List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
+                        messageDtos = convertToMessageDtos(messages);
+                    }
+
                     return ChatResponseDto.builder()
                             .sessionId(session.getId())
                             .childId(session.getChildId())
-                            .messages(convertToMessageDtos(messages))
+                            .messages(messageDtos)
                             .startedAt(session.getStartedAt())
                             .endedAt(session.getEndedAt())
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * [2025-11-04 김민중 수정] Pinecone 기반 대화 히스토리 조회
+     * MySQL 대신 Pinecone을 사용하여 더 빠르고 시맨틱 검색 가능
+     */
+    private List<Map<String, Object>> getConversationHistoryFromPinecone(Long sessionId, int limit) {
+        try {
+            String url = aiServerUrl + "/api/memory/conversations/session/" + sessionId + "?limit=" + limit;
+
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("conversations")) {
+                return (List<Map<String, Object>>) response.get("conversations");
+            }
+
+            log.warn("Pinecone 조회 실패, 빈 목록 반환");
+            return new java.util.ArrayList<>();
+
+        } catch (Exception e) {
+            log.warn("Pinecone에서 대화 기록 조회 실패, MySQL 사용: {}", e.getMessage());
+            // Fallback: MySQL 사용
+            return new java.util.ArrayList<>();
+        }
     }
 
     private String generateAIResponse(Long sessionId, String userMessage, Long childId) {
@@ -251,6 +360,9 @@ public class ChatService {
 
             // 선택 정보 추가
             requestBody.put("choices", summary.getChoices());
+
+            // [2025-11-04 김민중 추가] Scene 정보 추가
+            requestBody.put("scenes", summary.getScenes());
 
             log.info("Requesting first AI message from story: {}", requestBody);
 
@@ -325,6 +437,47 @@ public class ChatService {
                     .choices(List.of("더 알려줘", "다른 이야기"))
                     .emotion("neutral")
                     .build();
+        }
+    }
+
+    /**
+     * [2025-11-04 김민중 추가] Pinecone에 대화 동기화 (비동기)
+     * 실패해도 채팅 기능에는 영향 없음
+     */
+    @Async
+    public void syncConversationToPinecone(
+            Long sessionId,
+            Long childId,
+            String userMessage,
+            String aiResponse,
+            Long messageId
+    ) {
+        try {
+            String url = aiServerUrl + "/api/memory/sync/conversation";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("session_id", sessionId.intValue());
+            requestBody.put("child_id", childId.intValue());
+            requestBody.put("user_message", userMessage);
+            requestBody.put("ai_response", aiResponse);
+            requestBody.put("message_id", messageId.intValue());
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            Map<String, Object> response = restTemplate.postForObject(url, entity, Map.class);
+
+            if (response != null && "success".equals(response.get("status"))) {
+                log.info("✅ Pinecone sync successful: msg_{}", messageId);
+            } else {
+                log.warn("⚠️ Pinecone sync skipped or failed: {}", response);
+            }
+
+        } catch (Exception e) {
+            // 실패해도 무시 (채팅 기능에 영향 없음)
+            log.warn("❌ Pinecone sync failed (non-critical): {}", e.getMessage());
         }
     }
 

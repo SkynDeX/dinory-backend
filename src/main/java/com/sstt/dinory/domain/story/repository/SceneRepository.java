@@ -33,4 +33,11 @@ public interface SceneRepository extends JpaRepository<Scene, Long> {
      * @return Scene 리스트
      */
     List<Scene> findByStoryOrderBySceneNumber(Story story);
+
+    /**
+     * [2025-11-04 김민중 추가] Story ID로 씬 조회 (오름차순)
+     * @param storyId Story ID
+     * @return Scene 리스트
+     */
+    List<Scene> findByStoryIdOrderBySceneNumberAsc(Long storyId);
 }

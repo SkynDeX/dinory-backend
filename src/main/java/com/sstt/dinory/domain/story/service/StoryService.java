@@ -2,6 +2,7 @@ package com.sstt.dinory.domain.story.service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -355,11 +356,45 @@ public class StoryService {
 
     }
 
+    /**
+     * [2025-11-04 김민중 수정] Scene 정보도 함께 조회
+     */
     @Transactional(readOnly = true)
     public StoryCompletionSummaryDto getStoryCompletionSummary(Long completionId) {
         StoryCompletion completion = storyCompletionRepository.findById(completionId)
             .orElseThrow(() -> new RuntimeException("StoryCompletion 없음: " + completionId));
-        return StoryCompletionSummaryDto.from(completion);
+
+        // Scene 정보 조회
+        List<Scene> scenes = sceneRepository.findByStoryIdOrderBySceneNumberAsc(completion.getStory().getId());
+
+        // SceneDto 변환
+        List<StoryCompletionSummaryDto.SceneDto> sceneDtos = scenes.stream()
+            .map(scene -> StoryCompletionSummaryDto.SceneDto.builder()
+                .sceneNumber(scene.getSceneNumber())
+                .content(scene.getContent())
+                .imageUrl(scene.getImageUrl())
+                .build())
+            .collect(Collectors.toList());
+
+        // StoryCompletionSummaryDto 생성 후 Scene 정보 추가
+        StoryCompletionSummaryDto summary = StoryCompletionSummaryDto.from(completion);
+        return StoryCompletionSummaryDto.builder()
+            .completionId(summary.getCompletionId())
+            .childId(summary.getChildId())
+            .childName(summary.getChildName())
+            .storyId(summary.getStoryId())
+            .pineconeId(summary.getPineconeId())
+            .storyTitle(summary.getStoryTitle())
+            .totalTime(summary.getTotalTime())
+            .completedAt(summary.getCompletedAt())
+            .choices(summary.getChoices())
+            .scenes(sceneDtos)  // Scene 정보 추가
+            .totalCourage(summary.getTotalCourage())
+            .totalEmpathy(summary.getTotalEmpathy())
+            .totalCreativity(summary.getTotalCreativity())
+            .totalResponsibility(summary.getTotalResponsibility())
+            .totalFriendship(summary.getTotalFriendship())
+            .build();
     }
 
     /** 다음 씬 생성 */

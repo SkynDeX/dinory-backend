@@ -20,11 +20,12 @@ public class StoryCompletionSummaryDto {
     private Long childId;
     private String childName;
     private Long  storyId;
-    private String pineconeId; // Pinecone UUID    
+    private String pineconeId; // Pinecone UUID
     private String storyTitle;
     private Integer totalTime;
     private LocalDateTime completedAt;
     private List<ChoiceRecordDto> choices;
+    private List<SceneDto> scenes;  // [2025-11-04 김민중 추가] Scene 정보
 
     // 능력치 합계
     private Integer totalCourage;      // 용기
@@ -42,6 +43,17 @@ public class StoryCompletionSummaryDto {
         private String choiceId;  // AI 서버에서 "c11", "c12" 등의 String 반환
         private String abilityType;
         private Integer abilityPoints;
+    }
+
+    // [2025-11-04 김민중 추가] Scene 정보 DTO
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SceneDto {
+        private Integer sceneNumber;
+        private String content;  // 씬 내용
+        private String imageUrl;
     }
 
     public static StoryCompletionSummaryDto from(StoryCompletion completion) {
