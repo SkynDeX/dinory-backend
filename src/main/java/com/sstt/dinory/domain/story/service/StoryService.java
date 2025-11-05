@@ -633,8 +633,8 @@ public class StoryService {
             // [2025-11-03 김광현] 이미지가 없으면 생성 또는 캐시에서 가져오기
             if (scene.getImageUrl() == null && !scene.getContent().isEmpty()) {
                 try {
-                    // 영어 프롬프트 생성
-                    String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
+                    // [2025-11-05 수정] storyId 전달하여 캐릭터 설명 자동 조회
+                    String imagePrompt = translateToEnglishImagePrompt(scene.getContent(), story.getPineconeId());
                     log.info("씬 {} 이미지 프롬프트: {}", sceneNumber, imagePrompt);
                     
                     // [2025-11-03 김광현] 동일한 프롬프트로 생성된 이미지가 있는지 확인
@@ -744,8 +744,8 @@ public class StoryService {
 
             // 이미지가 없으면 생성
             if (!scene.getContent().isEmpty()) {
-                // 영어 프롬프트 생성
-                String imagePrompt = translateToEnglishImagePrompt(scene.getContent());
+                // [2025-11-05 수정] storyId 전달하여 캐릭터 설명 자동 조회
+                String imagePrompt = translateToEnglishImagePrompt(scene.getContent(), story.getPineconeId());
                 log.info("씬 {} 이미지 프롬프트: {}", sceneNumber, imagePrompt);
 
                 // 캐시 확인
@@ -884,9 +884,10 @@ public class StoryService {
 
     /**
      * [2025-11-04 김민중 수정] 한글 동화 내용을 AI 서버에서 영어 이미지 프롬프트로 변환
+     * [2025-11-05 수정] storyId 파라미터 추가하여 캐릭터 설명 자동 조회
      * FastAPI 서버의 /ai/create-image-prompt를 호출하여 핵심 시각적 요소만 추출
      */
-    private String translateToEnglishImagePrompt(String koreanText) {
+    private String translateToEnglishImagePrompt(String koreanText, String storyId) {
         // 입력 검증
         if (koreanText == null || koreanText.trim().isEmpty()) {
             log.warn("동화 내용이 비어있음, 기본 프롬프트 사용");
@@ -899,6 +900,7 @@ public class StoryService {
             Map<String, Object> request = new HashMap<>();
             request.put("koreanText", koreanText);
             request.put("maxLength", 70);  // 최대 70자로 제한
+            request.put("storyId", storyId);  // [2025-11-05 추가] 캐릭터 설명 자동 조회용
 
             log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
 
