@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -22,4 +23,16 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
            "WHERE cs.childId = :childId " +
            "ORDER BY cm.createdAt DESC")
     List<ChatMessage> findRecentMessagesByChildId(@Param("childId") Long childId, Pageable pageable);
+
+    // 대시보드: 특정 아이의 기간별 대화 메시지 조회
+    @Query("SELECT cm FROM ChatMessage cm " +
+           "JOIN cm.chatSession cs " +
+           "WHERE cs.childId = :childId " +
+           "AND cm.createdAt BETWEEN :startDate AND :endDate " +
+           "ORDER BY cm.createdAt ASC")
+    List<ChatMessage> findByChildIdAndCreatedAtBetween(
+        @Param("childId") Long childId,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate
+    );
 }

@@ -13,8 +13,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,7 +33,7 @@ public class GrowthReportService {
     
     // 성장 리포트 데이터 조회
     public Map<String, Object> getGrowthReport(Long childId, String period) {
-        log.info("성장 리포트 생성 시작: childId={}, period={}", childId, period);
+        log.info("성장 리포트 생성 시작 (최적화 버전): childId={}, period={}", childId, period);
 
         LocalDateTime endDate = LocalDateTime.now();
         LocalDateTime startDate = calculateStartDate(period);
@@ -53,39 +55,143 @@ public class GrowthReportService {
         Map<String, Double> beforeAbilities = calculateAbilities(firstHalfCompletions);
         Map<String, Double> afterAbilities = calculateAbilities(secondHalfCompletions);
 
-        // 강점 영역 (점수 높은 2개)
-        List<Map<String, Object>> strengths = findTopAreas(afterAbilities, secondHalfCompletions, 2);
+        // 강점/성장가능 영역 기본 데이터 (점수, 예시만)
+        List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
+        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, 2);
 
-        // 성장 가능 영역 (점수 낮은 2개)
-        List<Map<String, Object>> growthAreas = findBottomAreas(afterAbilities, secondHalfCompletions, 2);
-
-        // 마일스톤 생성
-        List<Map<String, Object>> milestones = generateMilestones(allCompletions, afterAbilities);
-
-        // AI 종합 평가 생성
-        String aiEvaluation = generateAIEvaluation(
-                beforeAbilities, afterAbilities, strengths, growthAreas, allCompletions.size(), period
-        );
-
-        // AI 추천 활동 생성
-        List<Map<String, Object>> recommendations = generateAIRecommendations(
-                beforeAbilities, afterAbilities, strengths, growthAreas, allCompletions.size(), period
-        );
+        // AI 분석은 별도 엔드포인트로 분리 (성능 최적화)
+        // 기본 템플릿 설명 추가
+        basicStrengths.forEach(s -> s.put("description", ""));
+        basicGrowthAreas.forEach(g -> {
+            g.put("description", "");
+            g.put("recommendation", "");
+        });
 
         Map<String, Object> result = new HashMap<>();
         result.put("comparison", Map.of(
                 "start", beforeAbilities,
                 "end", afterAbilities
         ));
+        result.put("aiEvaluation", "");  // 비동기 로딩
+        result.put("strengths", basicStrengths);
+        result.put("growthAreas", basicGrowthAreas);
+        result.put("milestones", new ArrayList<>());  // 비동기 로딩
+        result.put("recommendations", new ArrayList<>());  // 비동기 로딩
+
+        log.info("성장 리포트 생성 완료 (최적화)");
+        return result;
+    }
+
+    // AI 분석만 별도 조회 (비동기 로딩용)
+    public Map<String, Object> getGrowthReportAIAnalysis(Long childId, String period) {
+        log.info("성장 리포트 AI 분석 시작: childId={}, period={}", childId, period);
+
+        LocalDateTime endDate = LocalDateTime.now();
+        LocalDateTime startDate = calculateStartDate(period);
+        LocalDateTime midDate = calculateMidDate(startDate, endDate);
+
+        // 기간 전반부와 후반부 데이터 조회
+        List<StoryCompletion> firstHalfCompletions = storyCompletionRepository
+                .findByChildIdAndCompletedAtBetween(childId, startDate, midDate);
+
+        List<StoryCompletion> secondHalfCompletions = storyCompletionRepository
+                .findByChildIdAndCompletedAtBetween(childId, midDate, endDate);
+
+        List<StoryCompletion> allCompletions = storyCompletionRepository
+                .findByChildIdAndCompletedAtBetween(childId, startDate, endDate);
+
+        // Before/After 능력치 계산
+        Map<String, Double> beforeAbilities = calculateAbilities(firstHalfCompletions);
+        Map<String, Double> afterAbilities = calculateAbilities(secondHalfCompletions);
+
+        // 강점/성장가능 영역 기본 데이터
+        List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
+        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, 2);
+
+        // 🚀 통합 AI 호출
+        Map<String, Object> aiContent = generateAllAIContent(
+                beforeAbilities, afterAbilities, basicStrengths, basicGrowthAreas, allCompletions.size(), period
+        );
+
+        // AI 응답에서 데이터 추출
+        String aiEvaluation = (String) aiContent.getOrDefault("evaluation", "");
+        List<Map<String, Object>> recommendations = (List<Map<String, Object>>) aiContent.getOrDefault("recommendations", new ArrayList<>());
+        List<Map<String, Object>> aiMilestones = (List<Map<String, Object>>) aiContent.getOrDefault("milestones", new ArrayList<>());
+        List<Map<String, Object>> strengthDescriptions = (List<Map<String, Object>>) aiContent.getOrDefault("strengthDescriptions", new ArrayList<>());
+        List<Map<String, Object>> growthDescriptions = (List<Map<String, Object>>) aiContent.getOrDefault("growthAreaDescriptions", new ArrayList<>());
+
+        // 마일스톤에 날짜 추가
+        String today = LocalDateTime.now().toLocalDate().toString();
+        aiMilestones.forEach(m -> m.put("date", today));
+
+        // 폴백: AI 실패시 기본값 사용
+        if (aiEvaluation.isEmpty()) {
+            aiEvaluation = getFallbackEvaluation(basicStrengths, allCompletions.size());
+        }
+        if (recommendations.isEmpty()) {
+            recommendations = getFallbackRecommendations(basicGrowthAreas);
+        }
+        if (aiMilestones.isEmpty()) {
+            aiMilestones = getFallbackMilestones(allCompletions.size(), afterAbilities);
+        }
+        if (strengthDescriptions.isEmpty()) {
+            strengthDescriptions = basicStrengths;
+            strengthDescriptions.forEach(s -> s.put("description", s.get("area") + " 영역에서 뛰어난 능력을 보여줍니다."));
+        }
+        if (growthDescriptions.isEmpty()) {
+            growthDescriptions = basicGrowthAreas;
+            growthDescriptions.forEach(g -> {
+                g.put("description", g.get("area") + " 영역을 더 발전시킬 수 있습니다.");
+                g.put("recommendation", g.get("area") + " 관련 동화를 함께 읽어보세요.");
+            });
+        }
+
+        Map<String, Object> result = new HashMap<>();
         result.put("aiEvaluation", aiEvaluation);
-        result.put("strengths", strengths);
-        result.put("growthAreas", growthAreas);
-        result.put("milestones", milestones);
+        result.put("strengthDescriptions", strengthDescriptions);
+        result.put("growthAreaDescriptions", growthDescriptions);
+        result.put("milestones", aiMilestones);
         result.put("recommendations", recommendations);
 
-        log.info("성장 리포트 생성 완료");
+        log.info("성장 리포트 AI 분석 완료");
         return result;
+    }
 
+    // 🚀 통합 AI 콘텐츠 생성 (한 번의 API 호출)
+    private Map<String, Object> generateAllAIContent(
+            Map<String, Double> beforeAbilities,
+            Map<String, Double> afterAbilities,
+            List<Map<String, Object>> strengths,
+            List<Map<String, Object>> growthAreas,
+            int totalStories,
+            String period) {
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("beforeAbilities", beforeAbilities);
+            requestBody.put("afterAbilities", afterAbilities);
+            requestBody.put("strengths", strengths);
+            requestBody.put("growthAreas", growthAreas);
+            requestBody.put("totalStories", totalStories);
+            requestBody.put("period", period);
+
+            log.info("통합 AI 콘텐츠 요청 시작");
+            Map<String, Object> response = webClientBuilder.build()
+                    .post()
+                    .uri(aiServerUrl + "/ai/generate-all-growth-content")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block();
+
+            if (response != null) {
+                log.info("통합 AI 콘텐츠 생성 성공");
+                return response;
+            }
+        } catch (Exception e) {
+            log.error("통합 AI 콘텐츠 생성 실패: {}", e.getMessage());
+        }
+
+        return new HashMap<>();
     }
 
     // AI 추천 활동 생성
@@ -252,6 +358,75 @@ public class GrowthReportService {
         return milestones;
     }
 
+    // 기본 강점 영역 (AI 설명 제외)
+    private List<Map<String, Object>> findTopAreasBasic(Map<String, Double> afterAbilities, List<StoryCompletion> completions, int limit) {
+        return afterAbilities.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(limit)
+                .map(entry -> {
+                    Map<String, Object> area = new HashMap<>();
+                    area.put("area", entry.getKey());
+                    area.put("score", entry.getValue().intValue());
+                    area.put("examples", findExamples(completions, entry.getKey()));  // 복수형으로 변경
+                    return area;
+                })
+                .collect(Collectors.toList());
+    }
+
+    // 기본 성장가능 영역 (AI 설명 제외)
+    private List<Map<String, Object>> findBottomAreasBasic(Map<String, Double> afterAbilities, int limit) {
+        return afterAbilities.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .sorted(Map.Entry.comparingByValue())
+                .limit(limit)
+                .map(entry -> {
+                    Map<String, Object> area = new HashMap<>();
+                    area.put("area", entry.getKey());
+                    area.put("score", entry.getValue().intValue());
+                    return area;
+                })
+                .collect(Collectors.toList());
+    }
+
+    // 기본 예시 찾기 (AI 생성 제외)
+    private String findExampleBasic(List<StoryCompletion> completions, String ability) {
+        for (StoryCompletion completion : completions) {
+            List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
+            if (choices != null) {
+                for (StoryCompletion.ChoiceRecord choice : choices) {
+                    if (ability.equals(choice.getAbilityType())) {
+                        return "'" + completion.getStoryTitle() + "'에서 '" + choice.getChoiceText() + "'를 선택했습니다.";
+                    }
+                }
+            }
+        }
+        return ability + " 능력을 보여주는 선택을 했습니다.";
+    }
+
+    // 폴백 마일스톤
+    private List<Map<String, Object>> getFallbackMilestones(int totalStories, Map<String, Double> afterAbilities) {
+        List<Map<String, Object>> milestones = new ArrayList<>();
+        String today = LocalDateTime.now().toLocalDate().toString();
+
+        if (totalStories >= 5) {
+            milestones.add(Map.of(
+                    "achievement", totalStories + "개의 동화를 완료했습니다",
+                    "date", today
+            ));
+        }
+
+        afterAbilities.forEach((ability, score) -> {
+            if (score >= 75) {
+                milestones.add(Map.of(
+                        "achievement", ability + " 능력 " + score.intValue() + "점 달성",
+                        "date", today
+                ));
+            }
+        });
+
+        return milestones;
+    }
+
     private List<Map<String, Object>> findBottomAreas(Map<String, Double> afterAbilities, List<StoryCompletion> secondHalfCompletions, int limit) {
         List<Map<String, Object>> basicAreas = afterAbilities.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
@@ -310,7 +485,7 @@ public class GrowthReportService {
                     Map<String, Object> area = new HashMap<>();
                     area.put("area", entry.getKey());
                     area.put("score", entry.getValue().intValue());
-                    area.put("example", findExample(secondHalfCompletions, entry.getKey()));
+                    area.put("examples", findExamples(secondHalfCompletions, entry.getKey()));  // 복수형으로 변경
                     return area;
                 })
                 .collect(Collectors.toList());
@@ -355,6 +530,10 @@ public class GrowthReportService {
         Map<String, Integer> abilityPoints = new HashMap<>();
         Map<String, Integer> abilityCount = new HashMap<>();
 
+        int minPoints = Integer.MAX_VALUE;
+        int maxPoints = Integer.MIN_VALUE;
+        int totalCount = 0;
+
         for (StoryCompletion completion : firstHalfCompletions) {
             List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
             if (choices != null) {
@@ -368,21 +547,31 @@ public class GrowthReportService {
 
                         abilityPoints.put(abilityType, abilityPoints.get(abilityType) + points);
                         abilityCount.put(abilityType, abilityCount.get(abilityType) + 1);
+
+                        // 디버그: 점수 범위 확인
+                        minPoints = Math.min(minPoints, points);
+                        maxPoints = Math.max(maxPoints, points);
+                        totalCount++;
                     }
                 }
             }
         }
 
+        log.info("=== [GrowthReport] DB 점수 범위 확인 === min: {}, max: {}, totalCount: {}",
+                 minPoints, maxPoints, totalCount);
+
         // 평균 점수 계산 (0-100 스케일)
-        // DB 점수 범위: 10-15점 → 0-100으로 정규화
+        // DB 점수 범위: 8-15점 → 0-100으로 정규화
+        // 일반 선택지: 10-15점, 커스텀 선택지: 8-15점 (직접 입력이라 AI 분석 불확실성 고려)
         Map<String, Double> result = new HashMap<>();
         for (Map.Entry<String, Integer> entry : abilityPoints.entrySet()) {
             String ability = entry.getKey();
             int count = abilityCount.get(ability);
             if (count > 0) {
                 double avgPoints = (double) entry.getValue() / count;
-                // 10점 = 0점, 15점 = 100점으로 정규화
-                double normalized = ((avgPoints - 10.0) / 5.0) * 100.0;
+                log.info("능력치 평균 - {}: {} (총 {}점 / {}회)", ability, avgPoints, entry.getValue(), count);
+                // 8점 = 0점, 15점 = 100점으로 정규화
+                double normalized = ((avgPoints - 8.0) / 7.0) * 100.0;
                 result.put(ability, Math.max(0.0, Math.min(normalized, 100.0)));
             }
         }
@@ -407,46 +596,54 @@ public class GrowthReportService {
         };
     }
 
-    // 예시 찾기
-    private String findExample(List<StoryCompletion> completions, String ability) {
+    // 예시 찾기 - 여러 동화의 예시를 리스트로 반환
+    private List<String> findExamples(List<StoryCompletion> completions, String ability) {
+        log.info("=== findExamples 시작: ability={}, completions={} ===", ability, completions.size());
+
+        List<String> examples = new ArrayList<>();
+        Set<String> usedStories = new HashSet<>();  // 동화 제목 중복 방지
+
         for (StoryCompletion completion : completions) {
+            // 이미 3개 예시를 찾았으면 중단
+            if (examples.size() >= 3) {
+                break;
+            }
+
+            // 같은 동화는 한 번만 포함
+            if (usedStories.contains(completion.getStoryTitle())) {
+                continue;
+            }
+
             List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
+            log.info("동화 '{}' 선택지 개수: {}", completion.getStoryTitle(), choices != null ? choices.size() : 0);
+
             if (choices != null) {
                 for (StoryCompletion.ChoiceRecord choice : choices) {
+                    log.info("  선택지: abilityType={}, text={}", choice.getAbilityType(), choice.getChoiceText());
+
                     if (ability.equals(choice.getAbilityType())) {
                         String storyTitle = completion.getStoryTitle();
                         String choiceText = choice.getChoiceText();
 
-                        // AI로 자연스러운 예시 설명 생성
-                        try {
-                            Map<String, Object> requestBody = new HashMap<>();
-                            requestBody.put("storyTitle", storyTitle);
-                            requestBody.put("choiceText", choiceText);
-                            requestBody.put("ability", ability);
-
-                            Map<String, String> response = webClientBuilder.build()
-                                    .post()
-                                    .uri(aiServerUrl + "/ai/generate-example-description")
-                                    .bodyValue(requestBody)
-                                    .retrieve()
-                                    .bodyToMono(new ParameterizedTypeReference<Map<String, String>>() {})
-                                    .block();
-
-                            String aiExample = response != null ? response.get("example") : null;
-                            if (aiExample != null && !aiExample.isEmpty()) {
-                                return aiExample;
-                            }
-                        } catch (Exception e) {
-                            log.error("AI 예시 설명 생성 실패, 기본값 사용: {}", e.getMessage());
-                        }
-
-                        // 폴백: 기본 형식
-                        return "'" + storyTitle + "'에서 '" + choiceText + "'를 선택했습니다.";
+                        // 예시 추가
+                        String example = "'" + storyTitle + "'에서 '" + choiceText + "'를 선택했습니다.";
+                        examples.add(example);
+                        usedStories.add(storyTitle);
+                        log.info("✓ 예시 추가: {}", example);
+                        break;  // 이 동화에서는 첫 번째 매칭만 사용
                     }
                 }
             }
         }
-        return ability + " 능력을 보여주는 선택을 했습니다.";
+
+        // 예시가 없으면 기본 메시지
+        if (examples.isEmpty()) {
+            log.warn("예시를 찾지 못함. 기본 메시지 사용");
+            examples.add(ability + " 능력을 보여주는 선택을 했습니다.");
+        }
+
+        log.info("=== findExamples 완료: {}개 예시 반환 ===", examples.size());
+        return examples;
     }
 
 }
