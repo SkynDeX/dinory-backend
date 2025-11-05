@@ -65,6 +65,7 @@
          * 헬스 체크 엔드포인트 (모니터링 시스템용)
          */
         public static final String HEALTH_CHECK = "/actuator/health";
+        public static final String STORY_HEALTH = "/api/story/health";
 
         /**
          * RAG 메모리 API (FastAPI에서 호출)
@@ -91,6 +92,7 @@
             SWAGGER_UI,
             API_DOCS,
             HEALTH_CHECK,
+            STORY_HEALTH,
             RAG_CHAT_HISTORY,
             RAG_STORY_COMPLETIONS
         };

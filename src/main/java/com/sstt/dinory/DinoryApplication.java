@@ -10,7 +10,15 @@ public class DinoryApplication {
 
 	public static void main(String[] args) {
 		SpringApplication app = new SpringApplication(DinoryApplication.class);
-		app.setAdditionalProfiles("local", "secret");
+
+		// 환경 변수로 프로파일 제어 (Docker에서는 SPRING_PROFILES_ACTIVE 사용)
+		String activeProfiles = System.getenv("SPRING_PROFILES_ACTIVE");
+		if (activeProfiles == null || activeProfiles.isEmpty()) {
+			// 환경 변수가 없으면 local 개발 환경으로 설정
+			app.setAdditionalProfiles("local", "secret");
+		}
+		// 환경 변수가 있으면 (Docker 등) 그대로 사용
+
 		app.run(args);
 	}
 

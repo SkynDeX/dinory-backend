@@ -1,0 +1,42 @@
+# Production Environment Configuration
+# application.yml의 기본 설정을 상속받고, 프로덕션 환경에 필요한 것만 오버라이드합니다.
+
+spring:
+    datasource:
+        url: ${SPRING_DATASOURCE_URL}
+        username: ${SPRING_DATASOURCE_USERNAME}
+        password: ${SPRING_DATASOURCE_PASSWORD}
+        hikari:
+            maximum-pool-size: 10
+            minimum-idle: 2
+
+    jpa:
+        hibernate:
+            ddl-auto: validate  # Production: 자동 스키마 변경 비활성화
+        show-sql: false  # Production: SQL 로깅 비활성화
+
+ai:
+    server:
+        url: ${AI_SERVER_URL}
+
+app:
+    oauth2:
+        redirect-uri: ${APP_OAUTH2_REDIRECT_URI:http://localhost/oauth2/redirect}
+
+server:
+    port: 8090
+    compression:
+        enabled: true
+        mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+# Logging Configuration
+logging:
+    level:
+        root: INFO
+        com.dinory: INFO
+        org.springframework.web: WARN
+        org.hibernate: WARN
+    file:
+        name: /app/logs/application.log
+        max-size: 10MB
+        max-history: 30
