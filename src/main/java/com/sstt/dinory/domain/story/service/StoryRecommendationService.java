@@ -64,9 +64,10 @@ public class StoryRecommendationService {
                             .coverImageUrl(metadata != null ? (String) metadata.get("coverImageUrl") : null)
                             .themes(metadata != null ? parseThemes(metadata) : List.of())
                             .estimatedTime(metadata != null ? parseEstimatedTime(metadata) : 10)
-                            .description(metadata != null ? (String) metadata.get("plotSummaryText") : "")
+//                            .description(metadata != null ? (String) metadata.get("plotSummaryText") : "")
+                            .description(metadata != null ? (String) metadata.get("srcText") : "")
                             .build();
-                    
+
                     recommendations.add(dto);
                 }
 
