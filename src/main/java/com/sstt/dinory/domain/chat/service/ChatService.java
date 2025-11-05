@@ -38,6 +38,7 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final StoryCompletionRepository storyCompletionRepository;
+    private final com.sstt.dinory.domain.story.repository.SceneRepository sceneRepository;  // Scene 조회용
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${ai.server.url:http://localhost:8000}")
@@ -74,6 +75,38 @@ public class ChatService {
 
         // StoryCompletion 요약 정보 생성
         StoryCompletionSummaryDto summary = StoryCompletionSummaryDto.from(completion);
+
+        // Scene 정보 조회 및 추가
+        List<com.sstt.dinory.domain.story.entity.Scene> scenes =
+                sceneRepository.findByStoryIdOrderBySceneNumberAsc(completion.getStory().getId());
+
+        log.info("★ Scene 조회 시작: story_id={}", completion.getStory().getId());
+        log.info("★ 조회된 Scene 개수: {}", scenes.size());
+
+        List<StoryCompletionSummaryDto.SceneDto> sceneDtos = scenes.stream()
+                .map(scene -> {
+                    log.info("★ Scene {}: content length = {}", scene.getSceneNumber(),
+                             scene.getContent() != null ? scene.getContent().length() : 0);
+                    return StoryCompletionSummaryDto.SceneDto.builder()
+                            .sceneNumber(scene.getSceneNumber())
+                            .content(scene.getContent())
+                            .imageUrl(scene.getImageUrl())
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        summary = summary.toBuilder()
+                .scenes(sceneDtos)
+                .build();
+
+        log.info("★ Scene 정보 추가 완료: {} 개", sceneDtos.size());
+        if (!sceneDtos.isEmpty()) {
+            log.info("★ 첫 번째 scene preview: sceneNumber={}, content 앞 100자={}",
+                     sceneDtos.get(0).getSceneNumber(),
+                     sceneDtos.get(0).getContent() != null && sceneDtos.get(0).getContent().length() > 100
+                         ? sceneDtos.get(0).getContent().substring(0, 100)
+                         : sceneDtos.get(0).getContent());
+        }
 
         // 새로운 채팅 세션 생성 (동화와 연결)
         ChatSession session = ChatSession.builder()
@@ -490,5 +523,27 @@ public class ChatService {
                         .createdAt(msg.getCreatedAt())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * [2025-11-05 추가] 세션의 동화 완료 정보 조회 (AI 서버가 story_context 복원용)
+     */
+    public StoryCompletionSummaryDto getStoryCompletionBySession(Long sessionId) {
+        // 1. ChatSession 조회
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
+
+        // 2. story_completion_id 확인
+        Long storyCompletionId = session.getStoryCompletionId();
+        if (storyCompletionId == null) {
+            throw new RuntimeException("This session is not linked to a story completion");
+        }
+
+        // 3. StoryCompletion 조회
+        StoryCompletion completion = storyCompletionRepository.findById(storyCompletionId)
+                .orElseThrow(() -> new RuntimeException("Story completion not found: " + storyCompletionId));
+
+        // 4. StoryCompletionSummaryDto 생성 및 반환
+        return StoryCompletionSummaryDto.fromEntity(completion, sceneRepository);
     }
 }

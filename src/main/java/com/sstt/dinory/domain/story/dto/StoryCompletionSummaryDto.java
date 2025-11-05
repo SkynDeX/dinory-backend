@@ -2,8 +2,11 @@ package com.sstt.dinory.domain.story.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import com.sstt.dinory.domain.story.entity.Scene;
 import com.sstt.dinory.domain.story.entity.StoryCompletion;
+import com.sstt.dinory.domain.story.repository.SceneRepository;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class StoryCompletionSummaryDto {
@@ -41,6 +44,7 @@ public class StoryCompletionSummaryDto {
     public static class ChoiceRecordDto {
         private Integer sceneNumber;
         private String choiceId;  // AI 서버에서 "c11", "c12" 등의 String 반환
+        private String choiceText;  // [2025-11-05 추가] 선택지 텍스트
         private String abilityType;
         private Integer abilityPoints;
     }
@@ -69,6 +73,7 @@ public class StoryCompletionSummaryDto {
                 return ChoiceRecordDto.builder()
                     .sceneNumber(choice.getSceneNumber())
                     .choiceId(choice.getChoiceId())
+                    .choiceText(choice.getChoiceText())  // [2025-11-05 추가]
                     .abilityType(choice.getAbilityType())
                     .abilityPoints(choice.getAbilityPoints())
                     .build();
@@ -102,6 +107,29 @@ public class StoryCompletionSummaryDto {
             .totalCreativity(totalCreativity)
             .totalResponsibility(totalResponsibility)
             .totalFriendship(totalFriendship)
+            .build();
+    }
+
+    /**
+     * [2025-11-05 추가] Scene 정보를 포함한 StoryCompletionSummaryDto 생성
+     */
+    public static StoryCompletionSummaryDto fromEntity(StoryCompletion completion, SceneRepository sceneRepository) {
+        // 기본 정보는 from() 메서드로 생성
+        StoryCompletionSummaryDto dto = from(completion);
+
+        // Scene 정보 추가
+        List<Scene> scenes = sceneRepository.findByStoryIdOrderBySceneNumberAsc(completion.getStory().getId());
+        List<SceneDto> sceneDtos = scenes.stream()
+            .map(scene -> SceneDto.builder()
+                .sceneNumber(scene.getSceneNumber())
+                .content(scene.getContent())
+                .imageUrl(scene.getImageUrl())
+                .build())
+            .collect(Collectors.toList());
+
+        // toBuilder()를 사용해서 scenes 필드 추가
+        return dto.toBuilder()
+            .scenes(sceneDtos)
             .build();
     }
 }

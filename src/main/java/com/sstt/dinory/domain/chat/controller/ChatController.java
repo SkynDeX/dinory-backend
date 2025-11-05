@@ -96,4 +96,12 @@ public class ChatController {
         GenerateChoicesResponse response = chatService.generateChoices(request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * [2025-11-05 추가] 세션의 동화 완료 정보 조회 (AI 서버용)
+     */
+    @GetMapping("/{sessionId}/story-completion")
+    public ResponseEntity<?> getStoryCompletionBySession(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(chatService.getStoryCompletionBySession(sessionId));
+    }
 }
