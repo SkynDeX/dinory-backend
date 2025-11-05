@@ -183,29 +183,51 @@ public class StoryService {
         // 이미지 없이 Scene 먼저 저장
         saveSceneTextOnly(story, firstSceneResponse, 1);
 
-        // 이미지 비동기 생성
-        final Long storyId = story.getId();
-        CompletableFuture.runAsync(() -> {
-            try {
-                // 현재 트랜잭션이 커밋될 때까지 잠시 대기
-                Thread.sleep(100);
-
-                log.info("== 비동기 이미지 생성 시작 : sceneNumber=1, storyId={} ==", storyId);
-
-                // Story를 다시 조회 (새로운 트랜잭션)
-                Story freshStory = storyRepository.findById(storyId)
-                                .orElseThrow(() -> new RuntimeException("Story not found: " + storyId));
-
-                generateImageForScene(freshStory, 1);
-
-            } catch(Exception e) {
-                log.warn("비동기 이미지 생성 실패(Scene은 저장완료): {}", e.getMessage(), e);
-            }
-        });
-
         // [2025-11-03 김광현] 저장된 Scene에서 imageUrl 가져오기
         Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, 1)
                                         .orElse(null);
+
+        // [2025-11-05 김민중 수정] 이미지 비동기 생성 - Story not found 오류 방지를 위한 재시도 로직 추가
+        final Long storyId = story.getId();
+        final Long sceneId = savedScene != null ? savedScene.getId() : null;
+
+        if (sceneId == null) {
+            log.warn("Scene이 저장되지 않아 비동기 이미지 생성을 건너뜁니다.");
+        } else {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // [2025-11-05 김민중 수정] 트랜잭션 커밋을 위해 대기 시간 증가 (100ms -> 500ms)
+                    Thread.sleep(500);
+
+                    log.info("== 비동기 이미지 생성 시작 : sceneNumber=1, storyId={}, sceneId={} ==", storyId, sceneId);
+
+                    // [2025-11-05 김민중 수정] Story 조회 재시도 로직 추가 (최대 3회)
+                    Story freshStory = null;
+                    for (int i = 0; i < 3; i++) {
+                        freshStory = storyRepository.findById(storyId).orElse(null);
+                        if (freshStory != null) {
+                            break;
+                        }
+                        log.warn("Story 조회 실패, 재시도 {}/3", i + 1);
+                        Thread.sleep(200);
+                    }
+
+                    if (freshStory == null) {
+                        log.error("❌ Story not found after 3 retries: storyId={}", storyId);
+                        return;
+                    }
+
+                    generateImageForScene(freshStory, 1);
+                    log.info("✅ 비동기 이미지 생성 완료: sceneNumber=1, storyId={}", storyId);
+
+                } catch(InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("비동기 이미지 생성 중단: {}", ie.getMessage());
+                } catch(Exception e) {
+                    log.error("❌ 비동기 이미지 생성 실패(Scene은 저장완료): storyId={}, error={}", storyId, e.getMessage(), e);
+                }
+            });
+        }
 
         Map<String, Object> response = new HashMap<>(firstSceneResponse);
         response.put("completionId", completion.getId());
@@ -490,22 +512,56 @@ public class StoryService {
         //  Scene savedScene = sceneRepository.findByStoryAndSceneNumber(story, nextSceneNumber)
         //    .orElse(null);
         // [2025-11-04 김광현] 이미지는 비동기로
+        // [2025-11-05 김민중 수정] Scene 없음 오류 방지를 위한 재시도 로직 추가
         final Long storyId = story.getId();
         final int finalSceneNumber = nextSceneNumber;
         CompletableFuture.runAsync(() -> {
             try {
-                // 현재 트랜잭션이 커밋될 때까지 잠시 대기
-                Thread.sleep(100);
+                // [2025-11-05 김민중 수정] 트랜잭션 커밋을 위해 대기 시간 증가 (100ms -> 500ms)
+                Thread.sleep(500);
 
                 log.info("=== 비동기 이미지 생성 시작: sceneNumber={}, storyId={} ===", finalSceneNumber, storyId);
 
-                // Story를 다시 조회 (새로운 트랜잭션)
-                Story freshStory = storyRepository.findById(storyId)
-                        .orElseThrow(() -> new RuntimeException("Story not found: " + storyId));
+                // [2025-11-05 김민중 수정] Story 조회 재시도 로직 추가 (최대 3회)
+                Story freshStory = null;
+                for (int i = 0; i < 3; i++) {
+                    freshStory = storyRepository.findById(storyId).orElse(null);
+                    if (freshStory != null) {
+                        break;
+                    }
+                    log.warn("Story 조회 실패, 재시도 {}/3", i + 1);
+                    Thread.sleep(200);
+                }
+
+                if (freshStory == null) {
+                    log.error("❌ Story not found after 3 retries: storyId={}", storyId);
+                    return;
+                }
+
+                // [2025-11-05 김민중 수정] Scene 조회 재시도 로직 추가 (최대 3회)
+                Scene scene = null;
+                for (int i = 0; i < 3; i++) {
+                    scene = sceneRepository.findByStoryAndSceneNumber(freshStory, finalSceneNumber).orElse(null);
+                    if (scene != null) {
+                        break;
+                    }
+                    log.warn("Scene 조회 실패, 재시도 {}/3: sceneNumber={}", i + 1, finalSceneNumber);
+                    Thread.sleep(300);
+                }
+
+                if (scene == null) {
+                    log.error("❌ Scene not found after 3 retries: sceneNumber={}, storyId={}", finalSceneNumber, storyId);
+                    return;
+                }
 
                 generateImageForScene(freshStory, finalSceneNumber);
+                log.info("✅ 비동기 이미지 생성 완료: sceneNumber={}, storyId={}", finalSceneNumber, storyId);
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("비동기 이미지 생성 중단: {}", ie.getMessage());
             } catch (Exception e) {
-                log.warn("비동기 이미지 생성 실패 (Scene은 저장됨): {}", e.getMessage(), e);
+                log.error("❌ 비동기 이미지 생성 실패 (Scene은 저장됨): sceneNumber={}, error={}", finalSceneNumber, e.getMessage(), e);
             }
         });
 
@@ -834,7 +890,8 @@ public class StoryService {
         // 입력 검증
         if (koreanText == null || koreanText.trim().isEmpty()) {
             log.warn("동화 내용이 비어있음, 기본 프롬프트 사용");
-            return "Children's book illustration, warm and friendly atmosphere, digital art";
+            // [2025-11-05 김민중 수정] 캐릭터 일관성을 위한 기본 프롬프트
+            return "A cute child character, consistent anime art style, Studio Ghibli inspired, same character design, kawaii, soft pastel color palette";
         }
 
         try {
@@ -879,30 +936,32 @@ public class StoryService {
     }
 
     /**
-     * [2025-11-04 김민중 추가] 폴백 프롬프트 생성11
+     * [2025-11-04 김민중 추가] 폴백 프롬프트 생성
+     * [2025-11-05 김민중 수정] 캐릭터 일관성을 위한 프롬프트 강화
      */
     private String createFallbackPrompt(String koreanText) {
-        // 간단한 키워드 추출 (한글 동화에서 명사/동사 감지)
-        String basePrompt = "Children's book illustration, warm and friendly atmosphere";
+        // [2025-11-05 김민중 수정] 캐릭터 일관성 키워드를 기본으로 설정
+        String basePrompt = "A cute child character, consistent anime art style, Studio Ghibli inspired, same character design, kawaii, soft pastel color palette";
 
         // 동화 내용에서 간단한 키워드 추출
         if (koreanText.contains("숲") || koreanText.contains("나무")) {
-            basePrompt += ", forest scene";
+            basePrompt += ", magical forest scene";
         } else if (koreanText.contains("바다") || koreanText.contains("물고기")) {
-            basePrompt += ", ocean scene";
+            basePrompt += ", peaceful ocean scene";
         } else if (koreanText.contains("하늘") || koreanText.contains("구름")) {
-            basePrompt += ", sky scene";
+            basePrompt += ", dreamy sky scene";
         }
 
         if (koreanText.contains("친구") || koreanText.contains("함께")) {
-            basePrompt += ", friendship";
+            basePrompt += ", friendship theme";
         }
 
         if (koreanText.contains("용기") || koreanText.contains("용감")) {
             basePrompt += ", brave character";
         }
 
-        basePrompt += ", soft pastel colors, digital art";
+        // [2025-11-05 김민중 수정] 따뜻한 분위기 추가
+        basePrompt += ", warm and friendly atmosphere";
 
         log.info("폴백 프롬프트 생성: {}", basePrompt);
         return basePrompt;
