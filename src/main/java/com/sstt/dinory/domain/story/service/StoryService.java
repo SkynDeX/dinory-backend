@@ -899,7 +899,7 @@ public class StoryService {
             // FastAPI 서버에 프롬프트 생성 요청
             Map<String, Object> request = new HashMap<>();
             request.put("koreanText", koreanText);
-            request.put("maxLength", 70);  // 최대 70자로 제한
+            request.put("maxLength", 200);  // [2025-11-05 수정] 70 → 200자로 증가 (충분한 설명 보장)
             request.put("storyId", storyId);  // [2025-11-05 추가] 캐릭터 설명 자동 조회용
 
             log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
