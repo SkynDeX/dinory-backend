@@ -77,8 +77,8 @@ public class OverviewService {
         Map<String, Integer> abilityPoints = new HashMap<>();
         Map<String, Integer> abilityCount = new HashMap<>();
 
-        // 초기화
-        List<String> abilities = Arrays.asList("용기", "친절", "공감", "우정", "자존감");
+        // 초기화 - DB에 실제 저장되는 능력치
+        List<String> abilities = Arrays.asList("용기", "공감", "창의성", "책임감", "우정");
         for (String ability : abilities) {
             abilityPoints.put(ability, 0);
             abilityCount.put(ability, 0);
@@ -125,25 +125,27 @@ public class OverviewService {
     private Map<String, Double> convertToParentAbilities(Map<String, Double> childAbilities) {
         Map<String, Double> result = new LinkedHashMap<>();
 
-        // 정서 인식 및 조절 = 공감(70%) + 자존감(30%)
+        // DB 실제 능력치: 용기, 공감, 창의성, 책임감, 우정
+
+        // 정서 인식 및 조절 = 공감(70%) + 책임감(30%)
         result.put("정서 인식 및 조절",
-                childAbilities.get("공감") * 0.7 + childAbilities.get("자존감") * 0.3);
+                childAbilities.get("공감") * 0.7 + childAbilities.get("책임감") * 0.3);
 
-        // 사회적 상호작용 = 친절(50%) + 우정(50%)
+        // 사회적 상호작용 = 공감(50%) + 우정(50%)
         result.put("사회적 상호작용",
-                childAbilities.get("친절") * 0.5 + childAbilities.get("우정") * 0.5);
+                childAbilities.get("공감") * 0.5 + childAbilities.get("우정") * 0.5);
 
-        // 자아 개념 = 자존감(60%) + 용기(40%)
+        // 자아 개념 = 책임감(60%) + 용기(40%)
         result.put("자아 개념",
-                childAbilities.get("자존감") * 0.6 + childAbilities.get("용기") * 0.4);
+                childAbilities.get("책임감") * 0.6 + childAbilities.get("용기") * 0.4);
 
-        // 도전 및 적응력 = 용기(100%)
+        // 도전 및 적응력 = 용기(60%) + 창의성(40%)
         result.put("도전 및 적응력",
-                childAbilities.get("용기"));
+                childAbilities.get("용기") * 0.6 + childAbilities.get("창의성") * 0.4);
 
-        // 공감 및 친사회성 = 공감(60%) + 친절(40%)
+        // 공감 및 친사회성 = 공감(60%) + 우정(40%)
         result.put("공감 및 친사회성",
-                childAbilities.get("공감") * 0.6 + childAbilities.get("친절") * 0.4);
+                childAbilities.get("공감") * 0.6 + childAbilities.get("우정") * 0.4);
 
         return result;
     }
@@ -168,8 +170,8 @@ public class OverviewService {
     private List<Map<String, Object>> calculateEmotions(List<StoryCompletion> completions, String period) {
         // 긍정 감정 목록
         Set<String> positiveEmotions = Set.of("기뻐요", "신나요", "happy", "excited");
-        // 부정 감정 목록
-        Set<String> negativeEmotions = Set.of("슬퍼요", "화가나요", "걱정돼요", "sad", "angry", "worried");
+        // 부정 감정 목록 (공백 있는 버전도 포함)
+        Set<String> negativeEmotions = Set.of("슬퍼요", "화가나요", "화가 나요", "걱정돼요", "걱정 돼요", "sad", "angry", "worried");
 
         // 날짜별로 그룹화
         Map<String, int[]> emotionsByDate = new LinkedHashMap<>();
@@ -219,122 +221,90 @@ public class OverviewService {
         return result;
     }
 
-    // 선택 패턴 데이터 계산 (점수 기반)
+    // 선택 패턴 데이터 계산 (점수 합계 기준)
     private List<Map<String, Object>> calculateChoices(List<StoryCompletion> completions) {
-        // 능력별 점수 합계 및 카운트
+        // 능력별 점수 합계 및 선택 횟수 집계
         Map<String, Integer> abilityPoints = new HashMap<>();
         Map<String, Integer> abilityCounts = new HashMap<>();
 
         abilityPoints.put("용기", 0);
-        abilityPoints.put("친절", 0);
         abilityPoints.put("공감", 0);
+        abilityPoints.put("창의성", 0);
+        abilityPoints.put("책임감", 0);
         abilityPoints.put("우정", 0);
-        abilityPoints.put("자존감", 0);
 
         abilityCounts.put("용기", 0);
-        abilityCounts.put("친절", 0);
         abilityCounts.put("공감", 0);
+        abilityCounts.put("창의성", 0);
+        abilityCounts.put("책임감", 0);
         abilityCounts.put("우정", 0);
-        abilityCounts.put("자존감", 0);
 
-        int totalChoices = 0;
-        int minPoints = Integer.MAX_VALUE;
-        int maxPoints = Integer.MIN_VALUE;
+        int totalPoints = 0;
 
+        // 능력치별 점수 합계 및 횟수 집계
         for (StoryCompletion completion : completions) {
             List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
             if (choices != null) {
                 for (StoryCompletion.ChoiceRecord choice : choices) {
                     String abilityType = choice.getAbilityType();
                     Integer points = choice.getAbilityPoints();
-
                     if (abilityType != null && points != null && abilityPoints.containsKey(abilityType)) {
                         abilityPoints.put(abilityType, abilityPoints.get(abilityType) + points);
                         abilityCounts.put(abilityType, abilityCounts.get(abilityType) + 1);
-                        totalChoices++;
-
-                        // 디버그: 점수 범위 확인
-                        minPoints = Math.min(minPoints, points);
-                        maxPoints = Math.max(maxPoints, points);
+                        totalPoints += points;
                     }
                 }
             }
         }
 
-        log.info("=== DB 점수 범위 확인 === min: {}, max: {}, totalChoices: {}", minPoints, maxPoints, totalChoices);
+        log.info("=== 선택 패턴 집계 (점수 기준) === totalPoints: {}, 용기: {}점, 공감: {}점, 창의성: {}점, 책임감: {}점, 우정: {}점",
+                totalPoints,
+                abilityPoints.get("용기"),
+                abilityPoints.get("공감"),
+                abilityPoints.get("창의성"),
+                abilityPoints.get("책임감"),
+                abilityPoints.get("우정"));
 
-        if (totalChoices == 0) {
+        if (totalPoints == 0) {
             return new ArrayList<>();
         }
 
-        // 능력별 평균 점수 계산 (8-15 범위를 0-100으로 정규화)
-        // 일반 선택지: 10-15점, 커스텀 선택지: 8-15점 (직접 입력이라 AI 분석 불확실성 고려)
-        Map<String, Double> abilityScores = new HashMap<>();
-        for (String ability : abilityPoints.keySet()) {
-            int count = abilityCounts.get(ability);
-            if (count > 0) {
-                double avgPoints = (double) abilityPoints.get(ability) / count;
-                // 8점 = 0점, 15점 = 100점으로 정규화
-                double normalized = ((avgPoints - 8.0) / 7.0) * 100.0;
-                abilityScores.put(ability, Math.max(0.0, Math.min(normalized, 100.0)));
-            } else {
-                abilityScores.put(ability, 0.0);
-            }
-        }
-
-        // 점수 합계 계산
-        double totalScore = abilityScores.values().stream().mapToDouble(Double::doubleValue).sum();
-
-        if (totalScore == 0) {
-            return new ArrayList<>();
-        }
-
-        // 점수 기반 비율 계산
-        Map<String, Double> abilityRatios = new HashMap<>();
-        for (Map.Entry<String, Double> entry : abilityScores.entrySet()) {
-            abilityRatios.put(entry.getKey(), (entry.getValue() / totalScore) * 100.0);
-        }
-
-        Map<String, Integer> styleCounts = new HashMap<>();
-
-        for (StoryCompletion completion : completions) {
-            List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
-            if (choices != null) {
-                for (StoryCompletion.ChoiceRecord choice : choices) {
-                    String abilityType = choice.getAbilityType();
-                    if (abilityType == null) continue;
-
-                    String style = determineChoiceStyle(abilityType, abilityRatios);
-                    styleCounts.put(style, styleCounts.getOrDefault(style, 0) + 1);
-                }
-            }
-        }
-
-        Map<String, String> styleColors = Map.of(
-                "용감한 선택", "#2fa36b",
-                "배려하는 선택", "#87ceeb",
-                "협력하는 선택", "#ffd166",
-                "자신있는 선택", "#9b59b6",
-                "도전적인 선택", "#ff9b7a",
-                "신중한 선택", "#95a5a6"
+        // 능력치 이름과 색상 매핑
+        Map<String, String> abilityColors = Map.of(
+                "용기", "#2fa36b",
+                "공감", "#87ceeb",
+                "창의성", "#ffd166",
+                "책임감", "#9b59b6",
+                "우정", "#ff9b7a"
         );
 
+        // 결과 리스트 생성
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : styleCounts.entrySet()) {
-            int count = entry.getValue();
-            double percentage = (count * 100.0) / totalChoices;
+        for (Map.Entry<String, Integer> entry : abilityPoints.entrySet()) {
+            int points = entry.getValue();
+            if (points > 0) {  // 점수가 있는 능력치만 포함
+                double percentage = (points * 100.0) / totalPoints;
+                int count = abilityCounts.get(entry.getKey());
 
-            Map<String, Object> item = new HashMap<>();
-            item.put("name", entry.getKey());
-            item.put("value", Math.round(percentage));
-            item.put("count", count);
-            item.put("color", styleColors.getOrDefault(entry.getKey(), "#cccccc"));
+                Map<String, Object> item = new HashMap<>();
+                item.put("name", entry.getKey());
+                item.put("value", Math.round(percentage));
+                item.put("points", points);  // 점수 합계
+                item.put("count", count);    // 선택 횟수
+                item.put("color", abilityColors.getOrDefault(entry.getKey(), "#cccccc"));
 
-            result.add(item);
+                result.add(item);
+            }
         }
 
-        return result;
+        // 점수 비율 순으로 정렬 (내림차순)
+        result.sort((a, b) -> {
+            long valueA = (long) a.get("value");
+            long valueB = (long) b.get("value");
+            return Long.compare(valueB, valueA);
+        });
 
+        return result;
     }
 
     // 능력 타입과 전체 비율을 기반으로 선택 스타일 결정 (AI 기반)
@@ -409,7 +379,7 @@ public class OverviewService {
             return new ArrayList<>();
         }
 
-        // AI로 주제 추출
+        // AI로 주제 추출 + 심리분석
         try {
             Map<String, Object> requestBody = new HashMap<>();
 
@@ -438,10 +408,12 @@ public class OverviewService {
             if (response != null && response.containsKey("topics")) {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> aiTopics = (List<Map<String, Object>>) response.get("topics");
+                String psychologicalAnalysis = (String) response.getOrDefault("psychologicalAnalysis", "");
 
                 if (aiTopics != null && !aiTopics.isEmpty()) {
                     // size 계산 추가 (워드클라우드용)
                     List<Map<String, Object>> result = new ArrayList<>();
+
                     for (Map<String, Object> topic : aiTopics) {
                         Map<String, Object> item = new HashMap<>();
                         item.put("text", topic.get("text"));
@@ -460,7 +432,14 @@ public class OverviewService {
                         result.add(item);
                     }
 
-                    log.info("AI 대화 주제 추출 성공: {}개", result.size());
+                    // 심리 분석 결과를 첫 번째 항목에 메타데이터로 추가
+                    if (psychologicalAnalysis != null && !psychologicalAnalysis.isEmpty()) {
+                        Map<String, Object> metadata = new HashMap<>();
+                        metadata.put("psychologicalAnalysis", psychologicalAnalysis);
+                        result.add(0, metadata); // 첫 번째에 추가
+                    }
+
+                    log.info("AI 대화 주제 추출 성공: {}개, 심리분석 포함", result.size());
                     return result;
                 }
             }
