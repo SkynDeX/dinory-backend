@@ -15,6 +15,8 @@ import java.util.Map;
 public class OverviewResponseDto {
 
     private Map<String, Double> abilities;    // 부모용 5개 전문 영역
+    private Map<String, Object> abilityDetails; // 능력별 상세 정보 (활동 요약용)
+    private Map<String, List<Map<String, String>>> relatedStories; // 능력별 관련 동화
     private Integer totalStories;            // 총 완료 동화 수
     private Integer totalTime;              // 총 학습 시간 (초)
     private List<Map<String, Object>> emotions; // 감정 변화 추이

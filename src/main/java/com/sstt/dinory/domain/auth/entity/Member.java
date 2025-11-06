@@ -45,6 +45,9 @@ public class Member {
     @Column(nullable = false, length = 20)
     private Role role;
 
+    @Column(name = "last_selected_child_id")
+    private Long lastSelectedChildId;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

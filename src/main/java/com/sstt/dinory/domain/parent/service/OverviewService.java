@@ -46,6 +46,12 @@ public class OverviewService {
         // 3. 부모용 전문 영역으로 변환
         Map<String, Double> parentAbilities = convertToParentAbilities(childAbilities);
 
+        // 4. 능력별 관련 동화 추출
+        Map<String, List<Map<String, String>>> relatedStories = calculateRelatedStories(completions);
+
+        // 5. 능력별 상세 정보 (활동 요약용)
+        Map<String, Object> abilityDetails = calculateAbilityDetails(completions, parentAbilities);
+
         List<Map<String, Object>> emotions = calculateEmotions(completions, period);
         List<Map<String, Object>> choices = calculateChoices(completions);
         List<Map<String, Object>> recentStories = getRecentStories(completions);
@@ -57,11 +63,14 @@ public class OverviewService {
         System.out.println("emotions size: " + emotions.size());
         System.out.println("choices size: " + choices.size());
         System.out.println("recentStories size: " + recentStories.size());
+        System.out.println("abilityDetails: " + abilityDetails);
         System.out.println("=========================");
 
-        // 4. 기타 통계 데이터
+        // 6. 기타 통계 데이터
         Map<String, Object> result = new HashMap<>();
         result.put("abilities", parentAbilities);
+        result.put("abilityDetails", abilityDetails);
+        result.put("relatedStories", relatedStories);
         result.put("totalStories", completions.size());
         result.put("totalTime", completions.stream().mapToInt(c -> c.getTotalTime() != null ? c.getTotalTime() : 0).sum());
         result.put("emotions", emotions);
@@ -127,25 +136,110 @@ public class OverviewService {
 
         // DB 실제 능력치: 용기, 공감, 창의성, 책임감, 우정
 
-        // 정서 인식 및 조절 = 공감(70%) + 책임감(30%)
+        // 정서 인식 및 조절 = 공감(80%) + 책임감(20%)
         result.put("정서 인식 및 조절",
-                childAbilities.get("공감") * 0.7 + childAbilities.get("책임감") * 0.3);
+                childAbilities.get("공감") * 0.8 + childAbilities.get("책임감") * 0.2);
 
-        // 사회적 상호작용 = 공감(50%) + 우정(50%)
+        // 사회적 상호작용 = 우정(70%) + 공감(30%)
         result.put("사회적 상호작용",
-                childAbilities.get("공감") * 0.5 + childAbilities.get("우정") * 0.5);
+                childAbilities.get("우정") * 0.7 + childAbilities.get("공감") * 0.3);
 
-        // 자아 개념 = 책임감(60%) + 용기(40%)
+        // 자아 개념 = 책임감(70%) + 용기(30%)
         result.put("자아 개념",
-                childAbilities.get("책임감") * 0.6 + childAbilities.get("용기") * 0.4);
+                childAbilities.get("책임감") * 0.7 + childAbilities.get("용기") * 0.3);
 
-        // 도전 및 적응력 = 용기(60%) + 창의성(40%)
+        // 도전 및 적응력 = 용기(70%) + 창의성(30%)
         result.put("도전 및 적응력",
-                childAbilities.get("용기") * 0.6 + childAbilities.get("창의성") * 0.4);
+                childAbilities.get("용기") * 0.7 + childAbilities.get("창의성") * 0.3);
 
-        // 공감 및 친사회성 = 공감(60%) + 우정(40%)
-        result.put("공감 및 친사회성",
-                childAbilities.get("공감") * 0.6 + childAbilities.get("우정") * 0.4);
+        // 창의성 및 문제해결 = 창의성(80%) + 책임감(20%)
+        result.put("창의성 및 문제해결",
+                childAbilities.get("창의성") * 0.8 + childAbilities.get("책임감") * 0.2);
+
+        return result;
+    }
+
+    // 능력별 상세 정보 계산 (활동 요약용)
+    private Map<String, Object> calculateAbilityDetails(List<StoryCompletion> completions, Map<String, Double> parentAbilities) {
+        Map<String, Object> details = new HashMap<>();
+
+        // 발달시킨 능력 개수 (0보다 큰 점수를 가진 능력)
+        long developedAbilitiesCount = parentAbilities.values().stream()
+                .filter(score -> score > 0)
+                .count();
+
+        // 가장 많이 발달한 능력 찾기
+        String topAbility = "";
+        double topScore = 0.0;
+        for (Map.Entry<String, Double> entry : parentAbilities.entrySet()) {
+            if (entry.getValue() > topScore) {
+                topScore = entry.getValue();
+                topAbility = entry.getKey();
+            }
+        }
+
+        details.put("developedAbilitiesCount", developedAbilitiesCount);
+        details.put("topAbility", topAbility);
+        details.put("topAbilityScore", Math.round(topScore));
+        details.put("totalStories", completions.size());
+
+        return details;
+    }
+
+    // 부모용 능력별 관련 동화 추출 (점수 기준 상위 3개)
+    private Map<String, List<Map<String, String>>> calculateRelatedStories(List<StoryCompletion> completions) {
+        Map<String, List<Map<String, String>>> result = new LinkedHashMap<>();
+
+        // 부모용 능력 -> 아이 능력 매핑
+        Map<String, List<String>> parentToChildAbilities = Map.of(
+                "정서 인식 및 조절", List.of("공감", "책임감"),
+                "사회적 상호작용", List.of("우정", "공감"),
+                "자아 개념", List.of("책임감", "용기"),
+                "도전 및 적응력", List.of("용기", "창의성"),
+                "창의성 및 문제해결", List.of("창의성", "책임감")
+        );
+
+        // 각 부모용 능력별로 관련 동화 수집
+        for (Map.Entry<String, List<String>> entry : parentToChildAbilities.entrySet()) {
+            String parentAbility = entry.getKey();
+            List<String> childAbilities = entry.getValue();
+
+            // 동화별 점수를 계산하여 저장
+            List<Map<String, Object>> storyScores = new ArrayList<>();
+
+            for (StoryCompletion completion : completions) {
+                List<StoryCompletion.ChoiceRecord> choices = completion.getChoicesJson();
+                if (choices != null) {
+                    // 해당 능력 관련 총 점수 계산
+                    int totalScore = choices.stream()
+                            .filter(choice -> childAbilities.contains(choice.getAbilityType()))
+                            .mapToInt(choice -> choice.getAbilityPoints() != null ? choice.getAbilityPoints() : 0)
+                            .sum();
+
+                    if (totalScore > 0) {
+                        Map<String, Object> storyScore = new HashMap<>();
+                        storyScore.put("title", completion.getStoryTitle() != null ? completion.getStoryTitle() : "제목 없음");
+                        storyScore.put("date", completion.getCompletedAt().toLocalDate().toString());
+                        storyScore.put("score", totalScore);
+                        storyScores.add(storyScore);
+                    }
+                }
+            }
+
+            // 점수 높은 순으로 정렬 후 상위 3개 추출
+            List<Map<String, String>> topStories = storyScores.stream()
+                    .sorted((a, b) -> Integer.compare((int) b.get("score"), (int) a.get("score")))
+                    .limit(3)
+                    .map(storyScore -> {
+                        Map<String, String> story = new HashMap<>();
+                        story.put("title", (String) storyScore.get("title"));
+                        story.put("date", (String) storyScore.get("date"));
+                        return story;
+                    })
+                    .collect(Collectors.toList());
+
+            result.put(parentAbility, topStories);
+        }
 
         return result;
     }
@@ -269,13 +363,22 @@ public class OverviewService {
             return new ArrayList<>();
         }
 
-        // 능력치 이름과 색상 매핑
-        Map<String, String> abilityColors = Map.of(
-                "용기", "#2fa36b",
-                "공감", "#87ceeb",
-                "창의성", "#ffd166",
-                "책임감", "#9b59b6",
-                "우정", "#ff9b7a"
+        // 능력치를 선택 스타일 이름으로 변환
+        Map<String, String> abilityToStyle = Map.of(
+                "용기", "도전적인 선택",
+                "공감", "배려하는 선택",
+                "창의성", "창의적인 선택",
+                "책임감", "책임감 있는 선택",
+                "우정", "함께하는 선택"
+        );
+
+        // 선택 스타일별 색상 매핑
+        Map<String, String> styleColors = Map.of(
+                "도전적인 선택", "#2fa36b",
+                "배려하는 선택", "#87ceeb",
+                "창의적인 선택", "#ffd166",
+                "책임감 있는 선택", "#9b59b6",
+                "함께하는 선택", "#ff9b7a"
         );
 
         // 결과 리스트 생성
@@ -285,13 +388,14 @@ public class OverviewService {
             if (points > 0) {  // 점수가 있는 능력치만 포함
                 double percentage = (points * 100.0) / totalPoints;
                 int count = abilityCounts.get(entry.getKey());
+                String styleName = abilityToStyle.get(entry.getKey());
 
                 Map<String, Object> item = new HashMap<>();
-                item.put("name", entry.getKey());
+                item.put("name", styleName);
                 item.put("value", Math.round(percentage));
                 item.put("points", points);  // 점수 합계
                 item.put("count", count);    // 선택 횟수
-                item.put("color", abilityColors.getOrDefault(entry.getKey(), "#cccccc"));
+                item.put("color", styleColors.getOrDefault(styleName, "#cccccc"));
 
                 result.add(item);
             }
@@ -307,67 +411,6 @@ public class OverviewService {
         return result;
     }
 
-    // 능력 타입과 전체 비율을 기반으로 선택 스타일 결정 (AI 기반)
-    private String determineChoiceStyle(String abilityType, Map<String, Double> ratios) {
-        // AI 분석은 너무 느리므로, 스타일 매핑을 개선된 규칙 기반으로 처리
-        // 능력치 분포를 보고 더 자연스러운 스타일 결정
-
-        double courage = ratios.getOrDefault("용기", 0.0);
-        double kindness = ratios.getOrDefault("친절", 0.0);
-        double empathy = ratios.getOrDefault("공감", 0.0);
-        double friendship = ratios.getOrDefault("우정", 0.0);
-        double confidence = ratios.getOrDefault("자존감", 0.0);
-
-        // 전체 패턴을 고려한 스타일 결정
-        switch (abilityType) {
-            case "용기":
-                // 용기 + 자존감이 높으면 도전적, 용기만 높으면 용감한
-                if (courage >= 25 && confidence >= 25) {
-                    return "도전적인 선택";
-                } else if (courage >= 35) {
-                    return "용감한 선택";
-                } else {
-                    return "도전적인 선택";
-                }
-
-            case "친절":
-                // 친절 + 공감이 높으면 배려하는
-                if ((kindness + empathy) >= 50) {
-                    return "배려하는 선택";
-                } else {
-                    return "배려하는 선택";
-                }
-
-            case "공감":
-                // 공감이 높고 용기가 낮으면 신중한, 그 외는 배려하는
-                if (empathy >= 30 && courage <= 20) {
-                    return "신중한 선택";
-                } else if ((kindness + empathy) >= 50) {
-                    return "배려하는 선택";
-                } else {
-                    return "배려하는 선택";
-                }
-
-            case "우정":
-                // 우정은 항상 협력하는
-                return "협력하는 선택";
-
-            case "자존감":
-                // 자존감이 높으면 자신있는, 용기도 높으면 도전적인
-                if (courage >= 25 && confidence >= 25) {
-                    return "도전적인 선택";
-                } else if (confidence >= 30) {
-                    return "자신있는 선택";
-                } else {
-                    return "도전적인 선택";
-                }
-
-            default:
-                // 기타 능력치는 용감한 선택
-                return "용감한 선택";
-        }
-    }
-    
     // 대화 주제 (관심사) 데이터 계산 - AI 기반
     private List<Map<String, Object>> calculateTopics(Long childId, LocalDateTime startDate, LocalDateTime endDate) {
         // 기간 내 아이의 대화 메시지 조회

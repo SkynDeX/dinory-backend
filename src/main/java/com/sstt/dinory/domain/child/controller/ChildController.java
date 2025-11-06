@@ -68,4 +68,23 @@ public class ChildController {
         return ResponseEntity.noContent().build();
     }
 
+    // 마지막 선택 자녀 저장
+    @PostMapping("/select/{childId}")
+    public ResponseEntity<Void> selectChild(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long childId) {
+        Long memberId = userDetails.getMember().getId();
+        childService.setLastSelectedChild(memberId, childId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 마지막 선택 자녀 조회
+    @GetMapping("/selected")
+    public ResponseEntity<ChildResponseDto> getSelectedChild(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        Long memberId = userDetails.getMember().getId();
+        ChildResponseDto child = childService.getLastSelectedChild(memberId);
+        return ResponseEntity.ok(child);
+    }
+
 }

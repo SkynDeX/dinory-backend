@@ -44,6 +44,8 @@ public class ParentDashboardController {
 
         OverviewResponseDto overviewResponseDto = OverviewResponseDto.builder()
                 .abilities((Map<String, Double>) data.get("abilities"))
+                .abilityDetails((Map<String, Object>) data.get("abilityDetails"))
+                .relatedStories((Map<String, List<Map<String, String>>>) data.get("relatedStories"))
                 .totalStories((Integer) data.get("totalStories"))
                 .totalTime((Integer) data.get("totalTime"))
                 .emotions((List<Map<String, Object>>) data.get("emotions"))

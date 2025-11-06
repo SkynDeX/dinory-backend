@@ -192,4 +192,68 @@ public class ChildService {
         long years = days / 365;
         return years + "년 전";
     }
+
+    // 마지막 선택 자녀 저장
+    @Transactional
+    public void setLastSelectedChild(Long memberId, Long childId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
+
+        Child child = childRepository.findById(childId)
+                .orElseThrow(() -> new RuntimeException("자녀를 찾을 수 없습니다."));
+
+        // 권한 확인
+        if (!child.getMember().getId().equals(memberId)) {
+            throw new RuntimeException("접근 권한이 없습니다.");
+        }
+
+        member.setLastSelectedChildId(childId);
+        memberRepository.save(member);
+    }
+
+    // 마지막 선택 자녀 조회
+    public ChildResponseDto getLastSelectedChild(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
+
+        Long lastSelectedChildId = member.getLastSelectedChildId();
+
+        if (lastSelectedChildId == null) {
+            // 마지막 선택 자녀가 없으면 첫 번째 자녀 반환
+            List<Child> children = childRepository.findByMemberId(memberId);
+            if (children.isEmpty()) {
+                return null;
+            }
+            Child firstChild = children.get(0);
+            // 첫 번째 자녀를 마지막 선택으로 저장
+            member.setLastSelectedChildId(firstChild.getId());
+            memberRepository.save(member);
+
+            Integer totalStories = getTotalStories(firstChild.getId());
+            String lastActivity = getLastActivity(firstChild.getId());
+            return ChildResponseDto.from(firstChild, totalStories, lastActivity);
+        }
+
+        Child child = childRepository.findById(lastSelectedChildId)
+                .orElse(null);
+
+        if (child == null || !child.getMember().getId().equals(memberId)) {
+            // 저장된 자녀가 없거나 권한이 없으면 첫 번째 자녀 반환
+            List<Child> children = childRepository.findByMemberId(memberId);
+            if (children.isEmpty()) {
+                return null;
+            }
+            Child firstChild = children.get(0);
+            member.setLastSelectedChildId(firstChild.getId());
+            memberRepository.save(member);
+
+            Integer totalStories = getTotalStories(firstChild.getId());
+            String lastActivity = getLastActivity(firstChild.getId());
+            return ChildResponseDto.from(firstChild, totalStories, lastActivity);
+        }
+
+        Integer totalStories = getTotalStories(child.getId());
+        String lastActivity = getLastActivity(child.getId());
+        return ChildResponseDto.from(child, totalStories, lastActivity);
+    }
 }
