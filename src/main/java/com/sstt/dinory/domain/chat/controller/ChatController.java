@@ -52,6 +52,17 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * [2025-11-07 추가] 대화 종료 버튼 클릭 기록 (세션은 활성 유지)
+     * - last_closed_at 필드만 업데이트
+     * - ended_at은 null로 유지하여 세션 활성 상태 유지
+     */
+    @PostMapping("/{sessionId}/close")
+    public ResponseEntity<Void> recordChatClose(@PathVariable Long sessionId) {
+        chatService.recordChatClose(sessionId);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/{sessionId}")
     public ResponseEntity<ChatResponseDto> getChatSession(@PathVariable Long sessionId) {
         ChatResponseDto response = chatService.getChatSession(sessionId);

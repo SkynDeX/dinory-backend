@@ -46,20 +46,27 @@ public class ChatService {
 
     @Transactional
     public ChatResponseDto initChatSession(ChatInitRequest request) {
-        // 새로운 채팅 세션 생성
-        ChatSession session = ChatSession.builder()
-                .childId(request.getChildId())
-                .build();
+        // [2025-11-07 수정] 기존 활성 세션 재사용 (없으면 생성)
+        ChatSession session = chatSessionRepository
+                .findTopByChildIdAndEndedAtIsNullOrderByStartedAtDesc(request.getChildId())
+                .orElseGet(() -> {
+                    log.info("✅ 활성 세션 없음 - 새 세션 생성");
+                    ChatSession newSession = ChatSession.builder()
+                            .childId(request.getChildId())
+                            .build();
+                    return chatSessionRepository.save(newSession);
+                });
 
-        session = chatSessionRepository.save(session);
+        log.info("Chat session initialized: sessionId={} (기존 세션 재사용)", session.getId());
 
-        log.info("Chat session created: {}", session.getId());
+        // 기존 메시지 조회
+        List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
 
         return ChatResponseDto.builder()
                 .sessionId(session.getId())
                 .childId(session.getChildId())
                 .startedAt(session.getStartedAt())
-                .messages(List.of())
+                .messages(convertToMessageDtos(messages))
                 .build();
     }
 
@@ -108,15 +115,23 @@ public class ChatService {
                          : sceneDtos.get(0).getContent());
         }
 
-        // 새로운 채팅 세션 생성 (동화와 연결)
-        ChatSession session = ChatSession.builder()
-                .childId(summary.getChildId())
-                .storyCompletionId(request.getCompletionId())
-                .build();
+        // [2025-11-07 수정] 기존 활성 세션 재사용 (없으면 생성)
+        final Long childId = summary.getChildId(); // 람다 표현식을 위해 final 변수로 추출
+        ChatSession session = chatSessionRepository
+                .findTopByChildIdAndEndedAtIsNullOrderByStartedAtDesc(childId)
+                .orElseGet(() -> {
+                    log.info("✅ 활성 세션 없음 - 새 세션 생성");
+                    ChatSession newSession = ChatSession.builder()
+                            .childId(childId)
+                            .build();
+                    return chatSessionRepository.save(newSession);
+                });
 
+        // [2025-11-07 추가] 가장 최근 읽은 동화 정보 업데이트
+        session.setStoryCompletionId(request.getCompletionId());
         session = chatSessionRepository.save(session);
 
-        log.info("Chat session created from story: sessionId={}, storyId={}",
+        log.info("Chat session from story: sessionId={}, storyId={} (기존 세션 재사용, 최근 동화 업데이트)",
                  session.getId(), summary.getStoryId());
 
         // AI에게 동화 기반 첫 인사 메시지 생성 요청
@@ -201,6 +216,24 @@ public class ChatService {
         chatSessionRepository.save(session);
 
         log.info("Chat session ended: {}", sessionId);
+    }
+
+    /**
+     * [2025-11-07 추가] 대화 종료 버튼 클릭 기록 (세션은 활성 유지)
+     * - last_closed_at 필드만 업데이트
+     * - ended_at은 null로 유지하여 세션 활성 상태 유지
+     * - 다음에 디노 클릭 시 이전 대화 이어서 가능
+     */
+    @Transactional
+    public void recordChatClose(Long sessionId) {
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
+
+        session.setLastClosedAt(LocalDateTime.now());
+        chatSessionRepository.save(session);
+
+        log.info("Chat close button clicked (session remains active): sessionId={}, lastClosedAt={}",
+                 sessionId, session.getLastClosedAt());
     }
 
     /**
@@ -548,18 +581,18 @@ public class ChatService {
     }
 
     /**
-     * [2025-11-07 추가] DinoCharacter용 활성 세션 조회 또는 생성
-     * - 아이별로 하나의 메인 세션을 계속 유지
-     * - 동화 완료 세션(storyCompletionId != null)은 제외
+     * [2025-11-07 수정] DinoCharacter용 활성 세션 조회 또는 생성
+     * - 아이별로 하나의 메인 세션을 계속 유지 (동화 완료 여부 무관)
+     * - ended_at = null인 세션만 조회 (story_completion_id 조건 제거)
      * - 과거 대화 내역도 함께 반환
      */
     @Transactional
     public ChatResponseDto getOrCreateActiveSession(Long childId) {
         log.info("=== DinoCharacter 활성 세션 조회/생성: childId={} ===", childId);
 
-        // 1. 활성 세션 조회 (ended_at = null, story_completion_id = null)
+        // 1. 활성 세션 조회 (ended_at = null) - story_completion_id 조건 제거!
         java.util.Optional<ChatSession> existingSession =
-                chatSessionRepository.findTopByChildIdAndEndedAtIsNullAndStoryCompletionIdIsNullOrderByStartedAtDesc(childId);
+                chatSessionRepository.findTopByChildIdAndEndedAtIsNullOrderByStartedAtDesc(childId);
 
         if (existingSession.isPresent()) {
             // 기존 세션 있음 - 대화 내역과 함께 반환

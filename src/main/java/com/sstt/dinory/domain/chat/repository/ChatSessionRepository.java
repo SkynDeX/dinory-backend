@@ -12,10 +12,8 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, Long> 
 
     List<ChatSession> findByChildIdOrderByStartedAtDesc(Long childId);
 
+    // [2025-11-07 수정] 활성 세션 조회 (한 계정당 하나의 세션 유지)
     Optional<ChatSession> findTopByChildIdAndEndedAtIsNullOrderByStartedAtDesc(Long childId);
 
     List<ChatSession> findByChildIdAndEndedAtIsNull(Long childId);
-
-    // [2025-11-07 추가] DinoCharacter용 활성 세션 조회 (동화 완료 세션 제외)
-    Optional<ChatSession> findTopByChildIdAndEndedAtIsNullAndStoryCompletionIdIsNullOrderByStartedAtDesc(Long childId);
 }

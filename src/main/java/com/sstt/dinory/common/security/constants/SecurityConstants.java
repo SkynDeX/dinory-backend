@@ -75,6 +75,13 @@
         public static final String RAG_STORY_COMPLETIONS = "/api/story/completions/child/**";
 
         /**
+         * FastAPI 세션 복원 API (FastAPI에서 호출)
+         * <p>FastAPI가 서버 재시작 시 세션의 대화 히스토리와 스토리 컨텍스트를 복원하기 위한 API</p>
+         */
+        public static final String FASTAPI_CHAT_SESSION = "/api/chat/{sessionId}";
+        public static final String FASTAPI_CHAT_STORY_COMPLETION = "/api/chat/{sessionId}/story-completion";
+
+        /**
          * 완전 공개 엔드포인트 배열
          * <ul>
          *   <li>Spring Security: permitAll() 적용</li>
@@ -94,7 +101,9 @@
             HEALTH_CHECK,
             STORY_HEALTH,
             RAG_CHAT_HISTORY,
-            RAG_STORY_COMPLETIONS
+            RAG_STORY_COMPLETIONS,
+            FASTAPI_CHAT_SESSION,
+            FASTAPI_CHAT_STORY_COMPLETION
         };
 
 

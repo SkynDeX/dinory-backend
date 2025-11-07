@@ -34,6 +34,15 @@ public class ChatSession {
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
+    /**
+     * [2025-11-07 추가] 대화 종료 버튼 클릭 시각 기록 (세션은 활성 유지)
+     * - 사용자가 "대화 종료" 버튼을 눌렀을 때 기록
+     * - ended_at과 달리 세션은 계속 활성 상태로 유지됨
+     * - 다음에 디노 클릭 시 이전 대화 이어서 가능
+     */
+    @Column(name = "last_closed_at")
+    private LocalDateTime lastClosedAt;
+
     @OneToMany(mappedBy = "chatSession", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ChatMessage> messages = new ArrayList<>();
