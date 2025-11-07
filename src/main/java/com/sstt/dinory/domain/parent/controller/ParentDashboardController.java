@@ -38,9 +38,11 @@ public class ParentDashboardController {
     @GetMapping("/overview")
     public ResponseEntity<OverviewResponseDto> getOverview(
             @RequestParam Long childId,
-            @RequestParam(defaultValue = "day") String period) {
+            @RequestParam(defaultValue = "day") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        Map<String, Object> data = overviewService.getOverview(childId, period);
+        Map<String, Object> data = overviewService.getOverview(childId, period, startDate, endDate);
 
         OverviewResponseDto overviewResponseDto = OverviewResponseDto.builder()
                 .abilities((Map<String, Double>) data.get("abilities"))
@@ -61,12 +63,14 @@ public class ParentDashboardController {
     @GetMapping("/overview/topics")
     public ResponseEntity<List<Map<String, Object>>> getTopics(
             @RequestParam Long childId,
-            @RequestParam(defaultValue = "day") String period) {
+            @RequestParam(defaultValue = "day") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         log.info("Topics 조회 요청: childId={}, period={}", childId, period);
 
         try {
-            List<Map<String, Object>> topics = overviewService.getTopics(childId, period);
+            List<Map<String, Object>> topics = overviewService.getTopics(childId, period, startDate, endDate);
             return ResponseEntity.ok(topics);
         } catch (Exception e) {
             log.error("Topics 조회 실패", e);
@@ -79,12 +83,14 @@ public class ParentDashboardController {
     @GetMapping("/overview/insights")
     public ResponseEntity<Map<String, Object>> getAIInsights(
             @RequestParam Long childId,
-            @RequestParam(defaultValue = "day") String period) {
+            @RequestParam(defaultValue = "day") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         log.info("AI 인사이트 조회 요청: childId={}, period={}", childId, period);
 
         try {
-            Map<String, Object> insights = overviewService.getAIInsights(childId, period);
+            Map<String, Object> insights = overviewService.getAIInsights(childId, period, startDate, endDate);
             return ResponseEntity.ok(insights);
         } catch (Exception e) {
             log.error("AI 인사이트 조회 실패", e);
@@ -122,12 +128,14 @@ public class ParentDashboardController {
     @GetMapping("/growth-report")
     public ResponseEntity<Map<String, Object>> getGrowthReport(
             @RequestParam Long childId,
-            @RequestParam(defaultValue = "month") String period
+            @RequestParam(defaultValue = "month") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         log.info("성장 리포트 조회: childId={}, period={}", childId, period);
 
         try {
-            Map<String, Object> report = growthReportService.getGrowthReport(childId, period);
+            Map<String, Object> report = growthReportService.getGrowthReport(childId, period, startDate, endDate);
             return ResponseEntity.ok(report);
         } catch (Exception e) {
             log.error("성장 리포트 조회 실패", e);
@@ -140,12 +148,14 @@ public class ParentDashboardController {
     @GetMapping("/growth-report/ai-analysis")
     public ResponseEntity<Map<String, Object>> getGrowthReportAIAnalysis(
             @RequestParam Long childId,
-            @RequestParam(defaultValue = "month") String period
+            @RequestParam(defaultValue = "month") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         log.info("성장 리포트 AI 분석 조회: childId={}, period={}", childId, period);
 
         try {
-            Map<String, Object> analysis = growthReportService.getGrowthReportAIAnalysis(childId, period);
+            Map<String, Object> analysis = growthReportService.getGrowthReportAIAnalysis(childId, period, startDate, endDate);
             return ResponseEntity.ok(analysis);
         } catch (Exception e) {
             log.error("성장 리포트 AI 분석 실패", e);

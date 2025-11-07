@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,11 +33,20 @@ public class GrowthReportService {
     private String aiServerUrl;
     
     // 성장 리포트 데이터 조회
-    public Map<String, Object> getGrowthReport(Long childId, String period) {
+    public Map<String, Object> getGrowthReport(Long childId, String period, LocalDate customStartDate, LocalDate customEndDate) {
         log.info("성장 리포트 생성 시작 (최적화 버전): childId={}, period={}", childId, period);
 
-        LocalDateTime endDate = LocalDateTime.now();
-        LocalDateTime startDate = calculateStartDate(period);
+        LocalDateTime startDate;
+        LocalDateTime endDate;
+
+        if (customStartDate != null && customEndDate != null) {
+            startDate = customStartDate.atStartOfDay();
+            endDate = customEndDate.atTime(23, 59, 59);
+        } else {
+            startDate = calculateStartDate(period);
+            endDate = LocalDateTime.now();
+        }
+
         LocalDateTime midDate = calculateMidDate(startDate, endDate);
 
         // 기간 전반부와 후반부 데이터 조회
@@ -83,11 +93,20 @@ public class GrowthReportService {
     }
 
     // AI 분석만 별도 조회 (비동기 로딩용)
-    public Map<String, Object> getGrowthReportAIAnalysis(Long childId, String period) {
+    public Map<String, Object> getGrowthReportAIAnalysis(Long childId, String period, LocalDate customStartDate, LocalDate customEndDate) {
         log.info("성장 리포트 AI 분석 시작: childId={}, period={}", childId, period);
 
-        LocalDateTime endDate = LocalDateTime.now();
-        LocalDateTime startDate = calculateStartDate(period);
+        LocalDateTime startDate;
+        LocalDateTime endDate;
+
+        if (customStartDate != null && customEndDate != null) {
+            startDate = customStartDate.atStartOfDay();
+            endDate = customEndDate.atTime(23, 59, 59);
+        } else {
+            startDate = calculateStartDate(period);
+            endDate = LocalDateTime.now();
+        }
+
         LocalDateTime midDate = calculateMidDate(startDate, endDate);
 
         // 기간 전반부와 후반부 데이터 조회

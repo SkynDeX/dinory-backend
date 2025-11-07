@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -32,10 +33,20 @@ public class OverviewService {
     private String aiServerUrl;
 
     // 부모 대시보드 데이터 조회
-    public Map<String, Object> getOverview(Long childId, String period) {
+    public Map<String, Object> getOverview(Long childId, String period, LocalDate customStartDate, LocalDate customEndDate) {
         // 1. 기간별 완료된 동화 조회
-        LocalDateTime startDate = calculateStartDate(period);
-        LocalDateTime endDate = LocalDateTime.now();
+        LocalDateTime startDate;
+        LocalDateTime endDate;
+
+        if (customStartDate != null && customEndDate != null) {
+            // 사용자 지정 날짜 사용
+            startDate = customStartDate.atStartOfDay();
+            endDate = customEndDate.atTime(23, 59, 59);
+        } else {
+            // 기본 period 사용
+            startDate = calculateStartDate(period);
+            endDate = LocalDateTime.now();
+        }
 
         List<StoryCompletion> completions = storyCompletionRepository
                 .findByChildIdAndCompletedAtBetween(childId, startDate, endDate);
@@ -516,18 +527,34 @@ public class OverviewService {
     }
 
     // Topics만 별도 조회 (비동기 로딩용)
-    public List<Map<String, Object>> getTopics(Long childId, String period) {
-        LocalDateTime startDate = calculateStartDate(period);
-        LocalDateTime endDate = LocalDateTime.now();
+    public List<Map<String, Object>> getTopics(Long childId, String period, LocalDate customStartDate, LocalDate customEndDate) {
+        LocalDateTime startDate;
+        LocalDateTime endDate;
+
+        if (customStartDate != null && customEndDate != null) {
+            startDate = customStartDate.atStartOfDay();
+            endDate = customEndDate.atTime(23, 59, 59);
+        } else {
+            startDate = calculateStartDate(period);
+            endDate = LocalDateTime.now();
+        }
 
         return calculateTopics(childId, startDate, endDate);
     }
 
     // AI 인사이트만 별도 조회 (비동기 로딩용)
-    public Map<String, Object> getAIInsights(Long childId, String period) {
+    public Map<String, Object> getAIInsights(Long childId, String period, LocalDate customStartDate, LocalDate customEndDate) {
         // 1. 기간별 완료된 동화 조회
-        LocalDateTime startDate = calculateStartDate(period);
-        LocalDateTime endDate = LocalDateTime.now();
+        LocalDateTime startDate;
+        LocalDateTime endDate;
+
+        if (customStartDate != null && customEndDate != null) {
+            startDate = customStartDate.atStartOfDay();
+            endDate = customEndDate.atTime(23, 59, 59);
+        } else {
+            startDate = calculateStartDate(period);
+            endDate = LocalDateTime.now();
+        }
 
         List<StoryCompletion> completions = storyCompletionRepository
                 .findByChildIdAndCompletedAtBetween(childId, startDate, endDate);
