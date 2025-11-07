@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface ChildDinoRepository extends JpaRepository<ChildDinoEntity, Long> {
-    List<ChildDinoEntity> findByMemberId(Long memberId);
+    List<ChildDinoEntity> findByChildId(Long childId);    // [2025-11-07 김광현] memberId-> childId 로 변경
 }
 

@@ -17,14 +17,15 @@ public class ChildDinoService {
     private final ChildDinoRepository dinoRepository;
 
     // 내 공룡 목록 불러오기
-    public List<ChildDinoEntity> getMyDinos(Long memberId) {
-        return dinoRepository.findByMemberId(memberId);
+    public List<ChildDinoEntity> getMyDinos(Long childId) {
+
+        return dinoRepository.findByChildId(childId);
     }
 
     // 부화 저장
-    public ChildDinoEntity hatchDino(Long memberId, String name, String colorType) {
+    public ChildDinoEntity hatchDino(Long childId, String name, String colorType) {
         ChildDinoEntity dino = ChildDinoEntity.builder()
-                .memberId(memberId)                        // 로그인된 사용자 ID
+                .childId(childId)                        // memberId → childId
                 .dinoName(name)                            // 프론트에서 전달한 이름
                 .colorType(colorType)                      // 프론트에서 전달한 색상 타입
                 .hatched(true)                             // 부화 여부 true

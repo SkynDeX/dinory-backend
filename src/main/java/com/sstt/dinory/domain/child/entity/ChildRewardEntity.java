@@ -1,23 +1,22 @@
 package com.sstt.dinory.domain.child.entity;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 
-@Setter
 @Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 @Entity
-@Table
-public class MemberRewardEntity {
+@Table(name = "child_reward")
+public class ChildRewardEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long memberId;  // 유저
+    private Long childId;
 
     private int stars;  // 현재 별 개수
     private int eggs;   // 현재 알 개수
@@ -34,5 +33,12 @@ public class MemberRewardEntity {
     // 알 1개 추가
     public void addEgg() {
         this.eggs += 1;
+    }
+
+    // 알 1개 사용
+    public void useEgg() {
+        if (this.eggs > 0) {
+            this.eggs -= 1;
+        }
     }
 }

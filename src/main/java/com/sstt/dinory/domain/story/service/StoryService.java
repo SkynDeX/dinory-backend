@@ -5,6 +5,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 
+import com.sstt.dinory.domain.child.entity.ChildRewardEntity;
+import com.sstt.dinory.domain.child.service.ChildRewardService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,8 +41,6 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.swing.text.html.Option;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -55,6 +55,7 @@ public class StoryService {
     private final EntityManager entityManager;
     private final ImageService imageService;
     private final ImageGenerationRepository imageGenerationRepository;
+    private final ChildRewardService childRewardService;  // [2025-11-07 김광현] 공룡알 보상
 
 
     @Value("${ai.server.url:http://localhost:8000}")
@@ -357,6 +358,17 @@ public class StoryService {
         completion.setTotalTime(request.getTotalTime());
         completion.setCompletedAt(LocalDateTime.now());
         storyCompletionRepository.save(completion);
+
+        // 동화 완료 시 별 1개 추가하기
+        try {
+            Long childId = completion.getChild().getId();
+            ChildRewardEntity reward = childRewardService.addStar(childId);
+            log.info("동화 완료 보상 지급: completionId={}, childId={}, 현재별={}/5, 보유알={}",
+                    completionId, childId, reward.getStars(), reward.getEggs());
+        } catch (Exception e) {
+            log.error("보상 지급 실패: completionId={}, error={}", completionId, e.getMessage());
+            // 보상 지금 실패해도 동화 완료는 정상
+        }
     }
 
     

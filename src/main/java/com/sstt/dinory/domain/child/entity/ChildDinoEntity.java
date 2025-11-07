@@ -17,7 +17,7 @@ public class ChildDinoEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private  Long id;
 
-    private Long memberId;       // 로그인된 사용자 
+    private Long childId;       // [2025-11-07 김광현] memberId -> childId로 변경
     private String dinoName;     // 공룡 이름
     private String colorType;    // 공룡 색상
     private boolean hatched;     // 부화 여부 확인
