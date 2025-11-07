@@ -546,4 +546,85 @@ public class ChatService {
         // 4. StoryCompletionSummaryDto 생성 및 반환
         return StoryCompletionSummaryDto.fromEntity(completion, sceneRepository);
     }
+
+    /**
+     * [2025-11-07 추가] DinoCharacter용 활성 세션 조회 또는 생성
+     * - 아이별로 하나의 메인 세션을 계속 유지
+     * - 동화 완료 세션(storyCompletionId != null)은 제외
+     * - 과거 대화 내역도 함께 반환
+     */
+    @Transactional
+    public ChatResponseDto getOrCreateActiveSession(Long childId) {
+        log.info("=== DinoCharacter 활성 세션 조회/생성: childId={} ===", childId);
+
+        // 1. 활성 세션 조회 (ended_at = null, story_completion_id = null)
+        java.util.Optional<ChatSession> existingSession =
+                chatSessionRepository.findTopByChildIdAndEndedAtIsNullAndStoryCompletionIdIsNullOrderByStartedAtDesc(childId);
+
+        if (existingSession.isPresent()) {
+            // 기존 세션 있음 - 대화 내역과 함께 반환
+            ChatSession session = existingSession.get();
+            log.info("✅ 기존 활성 세션 발견: sessionId={}, 시작 시간={}", session.getId(), session.getStartedAt());
+
+            // [2025-11-07 수정] Pinecone에서 대화 내역 조회 (최근 20개만 - UX 개선)
+            List<ChatResponseDto.ChatMessageDto> messageDtos;
+            List<Map<String, Object>> pineconeConvs = getConversationHistoryFromPinecone(session.getId(), 20);
+
+            if (!pineconeConvs.isEmpty()) {
+                log.info("✅ Pinecone에서 {} 개 대화 로드", pineconeConvs.size());
+                messageDtos = pineconeConvs.stream()
+                        .flatMap(conv -> {
+                            java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
+
+                            pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                    .sender("USER")
+                                    .message((String) conv.get("message"))
+                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                    .build());
+
+                            pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                    .sender("AI")
+                                    .message((String) conv.get("response"))
+                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                    .build());
+
+                            return pair.stream();
+                        })
+                        .collect(Collectors.toList());
+            } else {
+                // Fallback: MySQL
+                log.info("⚠️ Pinecone 데이터 없음, MySQL에서 조회");
+                List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
+                messageDtos = convertToMessageDtos(messages);
+            }
+
+            return ChatResponseDto.builder()
+                    .sessionId(session.getId())
+                    .childId(session.getChildId())
+                    .messages(messageDtos)
+                    .startedAt(session.getStartedAt())
+                    .build();
+
+        } else {
+            // 활성 세션 없음 - 새로 생성
+            log.info("🆕 활성 세션 없음, 새로운 세션 생성");
+
+            ChatSession newSession = ChatSession.builder()
+                    .childId(childId)
+                    .build();
+
+            newSession = chatSessionRepository.save(newSession);
+
+            log.info("✅ 새 세션 생성 완료: sessionId={}", newSession.getId());
+
+            return ChatResponseDto.builder()
+                    .sessionId(newSession.getId())
+                    .childId(newSession.getChildId())
+                    .messages(List.of())
+                    .startedAt(newSession.getStartedAt())
+                    .build();
+        }
+    }
 }

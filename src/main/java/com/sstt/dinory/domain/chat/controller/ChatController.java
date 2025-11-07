@@ -65,6 +65,17 @@ public class ChatController {
     }
 
     /**
+     * [2025-11-07 추가] DinoCharacter용 활성 세션 조회 또는 생성
+     * - 아이별로 하나의 메인 세션을 유지
+     * - 과거 대화 내역 포함
+     */
+    @GetMapping("/child/{childId}/active-session")
+    public ResponseEntity<ChatResponseDto> getOrCreateActiveSession(@PathVariable Long childId) {
+        ChatResponseDto response = chatService.getOrCreateActiveSession(childId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * RAG: 특정 아이의 최근 대화 기록 조회
      * FastAPI의 MemoryService가 호출
      */
