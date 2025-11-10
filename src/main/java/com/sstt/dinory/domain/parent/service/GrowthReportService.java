@@ -580,8 +580,8 @@ public class GrowthReportService {
                  minPoints, maxPoints, totalCount);
 
         // 평균 점수 계산 (0-100 스케일)
-        // DB 점수 범위: 8-15점 → 0-100으로 정규화
-        // 일반 선택지: 10-15점, 커스텀 선택지: 8-15점 (직접 입력이라 AI 분석 불확실성 고려)
+        // DB 점수 범위: 10-17점 → 0-100으로 정규화
+        // 일반 선택지: 10-15점, 커스텀 선택지: 12-17점 (보너스 +2점)
         Map<String, Double> result = new HashMap<>();
         for (Map.Entry<String, Integer> entry : abilityPoints.entrySet()) {
             String ability = entry.getKey();
@@ -589,8 +589,8 @@ public class GrowthReportService {
             if (count > 0) {
                 double avgPoints = (double) entry.getValue() / count;
                 log.info("능력치 평균 - {}: {} (총 {}점 / {}회)", ability, avgPoints, entry.getValue(), count);
-                // 8점 = 0점, 15점 = 100점으로 정규화
-                double normalized = ((avgPoints - 8.0) / 7.0) * 100.0;
+                // 10점 = 0점, 15점 = 100점으로 정규화 (커스텀은 최대 17점이지만 15점 기준으로 정규화)
+                double normalized = ((avgPoints - 10.0) / 5.0) * 100.0;
                 result.put(ability, Math.max(0.0, Math.min(normalized, 100.0)));
             }
         }
@@ -613,6 +613,31 @@ public class GrowthReportService {
             case "halfyear" -> now.minusMonths(6);
             default -> now.minusMonths(1);
         };
+    }
+
+    // 부정적 키워드 검사
+    private boolean containsNegativeKeywords(String text) {
+        if (text == null) {
+            return false;
+        }
+
+        String lowerText = text.toLowerCase();
+
+        // 책임 회피 관련 키워드
+        String[] negativeKeywords = {
+                "떠넘", "대신 해", "너가 해", "너 혼자", "네가 해",
+                "알아서 해", "니가 해", "혼자 해줘", "혼자 해주라",
+                "때리", "패", "죽", "욕", "비웃", "놀리", "따돌",
+                "미워", "싫어", "바보", "멍청"
+        };
+
+        for (String keyword : negativeKeywords) {
+            if (lowerText.contains(keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // 예시 찾기 - 여러 동화의 예시를 리스트로 반환
@@ -638,17 +663,28 @@ public class GrowthReportService {
 
             if (choices != null) {
                 for (StoryCompletion.ChoiceRecord choice : choices) {
-                    log.info("  선택지: abilityType={}, text={}", choice.getAbilityType(), choice.getChoiceText());
+                    log.info("  선택지: abilityType={}, text={}", choice.getAbilityType(), choice.getAbilityPoints(), choice.getChoiceText());
 
-                    if (ability.equals(choice.getAbilityType())) {
-                        String storyTitle = completion.getStoryTitle();
+                    // 해당 능력이고, 점수가 12점 이상인 긍적적인 선택만 예시로 적용
+                    if (ability.equals(choice.getAbilityType()) &&
+                        choice.getAbilityType() != null &&
+                        choice.getAbilityPoints() >= 12) {
+
                         String choiceText = choice.getChoiceText();
+
+                        // 부정적 키워드가 포함된 선택지는 제외
+                        if (containsNegativeKeywords(choiceText)) {
+                            log.info("부정적 키워드 포함으로 제외: {}", choiceText);
+                            continue;
+                        }
+
+                        String storyTitle = completion.getStoryTitle();
 
                         // 예시 추가
                         String example = "'" + storyTitle + "'에서 '" + choiceText + "'를 선택했습니다.";
                         examples.add(example);
                         usedStories.add(storyTitle);
-                        log.info("✓ 예시 추가: {}", example);
+                        log.info("✓ 예시 추가 ({}점): {}", choice.getAbilityPoints(), example);
                         break;  // 이 동화에서는 첫 번째 매칭만 사용
                     }
                 }
