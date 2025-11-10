@@ -255,30 +255,38 @@ public class ChatService {
                         // Pinecone은 대화 쌍(message + response)으로 저장됨
                         java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
 
-                        // 사용자 메시지
-                        pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
-                                .sender("USER")
-                                .message((String) conv.get("message"))
-                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                .build());
+                        // [2025-11-10 수정] 빈 메시지 필터링
+                        String userMessage = (String) conv.get("message");
+                        String aiResponse = (String) conv.get("response");
 
-                        // AI 응답
-                        pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
-                                .sender("AI")
-                                .message((String) conv.get("response"))
-                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                .build());
+                        if (userMessage != null && !userMessage.trim().isEmpty()) {
+                            pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                    .sender("USER")
+                                    .message(userMessage)
+                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                    .build());
+                        }
+
+                        if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                            pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                    .sender("AI")
+                                    .message(aiResponse)
+                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                    .build());
+                        }
 
                         return pair.stream();
                     })
                     .collect(Collectors.toList());
+            log.info("📊 Pinecone 메시지 파싱 완료: {} 개 메시지", messageDtos.size());
         } else {
             // Fallback: MySQL에서 조회
             log.warn("⚠️ Pinecone 조회 실패, MySQL 사용");
             List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(sessionId);
             messageDtos = convertToMessageDtos(messages);
+            log.info("📊 MySQL에서 {} 개 메시지 로드", messageDtos.size());
         }
 
         return ChatResponseDto.builder()
@@ -309,19 +317,27 @@ public class ChatService {
                                 .flatMap(conv -> {
                                     java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
 
-                                    pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                            .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
-                                            .sender("USER")
-                                            .message((String) conv.get("message"))
-                                            .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                            .build());
+                                    // [2025-11-10 수정] 빈 메시지 필터링
+                                    String userMessage = (String) conv.get("message");
+                                    String aiResponse = (String) conv.get("response");
 
-                                    pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                            .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
-                                            .sender("AI")
-                                            .message((String) conv.get("response"))
-                                            .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                            .build());
+                                    if (userMessage != null && !userMessage.trim().isEmpty()) {
+                                        pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                                .sender("USER")
+                                                .message(userMessage)
+                                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                                .build());
+                                    }
+
+                                    if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                                        pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                                .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                                .sender("AI")
+                                                .message(aiResponse)
+                                                .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                                .build());
+                                    }
 
                                     return pair.stream();
                                 })
@@ -599,6 +615,13 @@ public class ChatService {
             ChatSession session = existingSession.get();
             log.info("✅ 기존 활성 세션 발견: sessionId={}, 시작 시간={}", session.getId(), session.getStartedAt());
 
+            // [2025-11-10 수정] 일반 대화에서는 동화 정보를 제거 (Pinecone만 사용)
+            if (session.getStoryCompletionId() != null) {
+                log.info("🔄 일반 대화 모드로 전환: storyCompletionId 초기화 (기존: {})", session.getStoryCompletionId());
+                session.setStoryCompletionId(null);
+                chatSessionRepository.save(session);
+            }
+
             // [2025-11-07 수정] Pinecone에서 대화 내역 조회 (최근 20개만 - UX 개선)
             List<ChatResponseDto.ChatMessageDto> messageDtos;
             List<Map<String, Object>> pineconeConvs = getConversationHistoryFromPinecone(session.getId(), 20);
@@ -609,28 +632,43 @@ public class ChatService {
                         .flatMap(conv -> {
                             java.util.List<ChatResponseDto.ChatMessageDto> pair = new java.util.ArrayList<>();
 
-                            pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
-                                    .sender("USER")
-                                    .message((String) conv.get("message"))
-                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                    .build());
+                            // [2025-11-10 수정] 빈 메시지 필터링 및 로그 추가
+                            String userMessage = (String) conv.get("message");
+                            String aiResponse = (String) conv.get("response");
 
-                            pair.add(ChatResponseDto.ChatMessageDto.builder()
-                                    .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
-                                    .sender("AI")
-                                    .message((String) conv.get("response"))
-                                    .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
-                                    .build());
+                            if (userMessage != null && !userMessage.trim().isEmpty()) {
+                                pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                        .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")))
+                                        .sender("USER")
+                                        .message(userMessage)
+                                        .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                        .build());
+                            } else {
+                                log.warn("⚠️ 빈 사용자 메시지 발견: message_id={}", conv.get("message_id"));
+                            }
+
+                            if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                                pair.add(ChatResponseDto.ChatMessageDto.builder()
+                                        .id(Long.parseLong(conv.get("message_id").toString().replace("msg_", "")) + 1)
+                                        .sender("AI")
+                                        .message(aiResponse)
+                                        .createdAt(java.time.LocalDateTime.parse((String) conv.get("created_at")))
+                                        .build());
+                            } else {
+                                log.warn("⚠️ 빈 AI 응답 발견: message_id={}", conv.get("message_id"));
+                            }
 
                             return pair.stream();
                         })
                         .collect(Collectors.toList());
+
+                log.info("📊 Pinecone 메시지 파싱 완료: {} 개 메시지 (USER + AI)", messageDtos.size());
             } else {
                 // Fallback: MySQL
                 log.info("⚠️ Pinecone 데이터 없음, MySQL에서 조회");
                 List<ChatMessage> messages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
                 messageDtos = convertToMessageDtos(messages);
+                log.info("📊 MySQL에서 {} 개 메시지 로드", messageDtos.size());
             }
 
             return ChatResponseDto.builder()
