@@ -7,6 +7,7 @@ import com.sstt.dinory.domain.story.repository.StoryCompletionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cglib.core.Local;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,7 +64,7 @@ public class OverviewService {
         // 5. 능력별 상세 정보 (활동 요약용)
         Map<String, Object> abilityDetails = calculateAbilityDetails(completions, parentAbilities);
 
-        List<Map<String, Object>> emotions = calculateEmotions(completions, period);
+        List<Map<String, Object>> emotions = calculateEmotions(completions, period, customStartDate, customEndDate);
         List<Map<String, Object>> choices = calculateChoices(completions);
         List<Map<String, Object>> recentStories = getRecentStories(completions);
 
@@ -272,7 +273,7 @@ public class OverviewService {
     }
 
     // 감정 변화 추이 데이터 계산
-    private List<Map<String, Object>> calculateEmotions(List<StoryCompletion> completions, String period) {
+    private List<Map<String, Object>> calculateEmotions(List<StoryCompletion> completions, String period, LocalDate customStartDate, LocalDate customEndDate) {
         // 긍정 감정 목록
         Set<String> positiveEmotions = Set.of("기뻐요", "신나요", "happy", "excited");
         // 부정 감정 목록 (공백 있는 버전도 포함)
@@ -287,7 +288,11 @@ public class OverviewService {
             String dateKey;
             LocalDateTime completedAt = completion.getCompletedAt();
 
-            if ("day".equals(period)) {
+            // 사용자 지정 날짜 범위인 경우
+            if (customStartDate != null && customEndDate != null) {
+                // 사용자 지정 기간: 일별로 표시
+                dateKey = completedAt.format(DateTimeFormatter.ofPattern("MM-dd"));
+            } else if ("day".equals(period)) {
                 // 일간: 시간대별 (데이터가 있는 시간만)
                 dateKey = completion.getCompletedAt().format(DateTimeFormatter.ofPattern("HH:00"));
             } else if ("week".equals(period)) {
@@ -385,11 +390,11 @@ public class OverviewService {
 
         // 선택 스타일별 색상 매핑
         Map<String, String> styleColors = Map.of(
-                "도전적인 선택", "#2fa36b",
-                "배려하는 선택", "#87ceeb",
-                "창의적인 선택", "#ffd166",
-                "책임감 있는 선택", "#9b59b6",
-                "함께하는 선택", "#ff9b7a"
+                "도전적인 선택", "#ff9b7a",
+                "배려하는 선택", "#ff7eb9",
+                "창의적인 선택", "#87ceeb",
+                "책임감 있는 선택", "#ffd166",
+                "함께하는 선택", "#529876"
         );
 
         // 결과 리스트 생성
