@@ -77,9 +77,10 @@
         /**
          * FastAPI 세션 복원 API (FastAPI에서 호출)
          * <p>FastAPI가 서버 재시작 시 세션의 대화 히스토리와 스토리 컨텍스트를 복원하기 위한 API</p>
+         * <p>[2025-11-11 수정] Spring Security 경로 매칭을 위해 와일드카드(*) 사용</p>
          */
-        public static final String FASTAPI_CHAT_SESSION = "/api/chat/{sessionId}";
-        public static final String FASTAPI_CHAT_STORY_COMPLETION = "/api/chat/{sessionId}/story-completion";
+        public static final String FASTAPI_CHAT_SESSION = "/api/chat/*";
+        public static final String FASTAPI_CHAT_STORY_COMPLETION = "/api/chat/*/story-completion";
 
         /**
          * 완전 공개 엔드포인트 배열
