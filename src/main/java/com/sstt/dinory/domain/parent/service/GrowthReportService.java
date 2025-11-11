@@ -67,7 +67,7 @@ public class GrowthReportService {
 
         // 강점/성장가능 영역 기본 데이터 (점수, 예시만)
         List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
-        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, 2);
+        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, secondHalfCompletions,2);
 
         // AI 분석은 별도 엔드포인트로 분리 (성능 최적화)
         // 기본 템플릿 설명 추가
@@ -125,7 +125,7 @@ public class GrowthReportService {
 
         // 강점/성장가능 영역 기본 데이터
         List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
-        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, 2);
+        List<Map<String, Object>> basicGrowthAreas = findBottomAreasBasic(afterAbilities, secondHalfCompletions,2);
 
         // 🚀 통합 AI 호출
         Map<String, Object> aiContent = generateAllAIContent(
@@ -393,7 +393,7 @@ public class GrowthReportService {
     }
 
     // 기본 성장가능 영역 (AI 설명 제외)
-    private List<Map<String, Object>> findBottomAreasBasic(Map<String, Double> afterAbilities, int limit) {
+    private List<Map<String, Object>> findBottomAreasBasic(Map<String, Double> afterAbilities, List<StoryCompletion> completions, int limit) {
         return afterAbilities.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
                 .sorted(Map.Entry.comparingByValue())
@@ -402,6 +402,7 @@ public class GrowthReportService {
                     Map<String, Object> area = new HashMap<>();
                     area.put("area", entry.getKey());
                     area.put("score", entry.getValue().intValue());
+                    area.put("examples", findExamples(completions, entry.getKey()));
                     return area;
                 })
                 .collect(Collectors.toList());

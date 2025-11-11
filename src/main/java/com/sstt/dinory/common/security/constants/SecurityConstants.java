@@ -104,7 +104,7 @@
             RAG_CHAT_HISTORY,
             RAG_STORY_COMPLETIONS,
             FASTAPI_CHAT_SESSION,
-            FASTAPI_CHAT_STORY_COMPLETION
+            FASTAPI_CHAT_STORY_COMPLETION,
         };
 
 
@@ -171,6 +171,12 @@
         public static final String STORY_API = "/api/story/**";
 
         /**
+         * 공룡 API
+         * <p>AI 기반 동화 생성 - 인증 필수</p>
+         */
+        public static final String DINO_API = "/api/dino/**";
+
+        /**
          * 인증 필요 엔드포인트 배열 (문서화 목적)
          * <ul>
          *   <li>Spring Security: authenticated() 적용</li>
@@ -193,7 +199,8 @@
             CHILD_API,
             CHAT_API,
             DIARY_API,
-            STORY_API
+            STORY_API,
+            DINO_API
         };
 
         // ========== 개발자 참고 정보 ==========
