@@ -659,8 +659,9 @@ public class StoryService {
                         scene.setImageUrl(cachedUrl);
                         scene.setImagePrompt(imagePrompt);
                         sceneRepository.save(scene);
-                        log.info("씬 {} 캐시된 이미지 사용: {}", sceneNumber, 
-                            cachedUrl.substring(0, Math.min(80, cachedUrl.length())));
+                        // [2025-11-11 수정] 간결한 로그
+                        log.info("씬 {} 캐시된 이미지 사용", sceneNumber);
+                        log.debug("캐시 URL: {}", cachedUrl);
                     } else {
                         // 새로 이미지 생성
                         log.info("씬 {} 이미지 생성 시작...", sceneNumber);
@@ -677,8 +678,9 @@ public class StoryService {
                             scene.setImageUrl(imageResponse.getImageUrl());
                             scene.setImagePrompt(imagePrompt);
                             sceneRepository.save(scene);
-                            log.info("씬 {} 이미지 생성 완료: {}", sceneNumber, 
-                                imageResponse.getImageUrl().substring(0, Math.min(80, imageResponse.getImageUrl().length())));
+                            // [2025-11-11 수정] 전체 프롬프트 로그 출력 (디버깅용)
+                            log.info("씬 {} 이미지 생성 완료", sceneNumber);
+                            log.debug("이미지 URL: {}", imageResponse.getImageUrl());
                         } else {
                             log.warn("씬 {} 이미지 생성 실패: status={}", sceneNumber, imageResponse.getStatus());
                         }
@@ -911,7 +913,7 @@ public class StoryService {
             // FastAPI 서버에 프롬프트 생성 요청
             Map<String, Object> request = new HashMap<>();
             request.put("koreanText", koreanText);
-            request.put("maxLength", 200);  // [2025-11-05 수정] 70 → 200자로 증가 (충분한 설명 보장)
+            request.put("maxLength", 500);  // [2025-11-11 수정] 200 → 500자로 증가 (프롬프트 잘림 방지)
             request.put("storyId", storyId);  // [2025-11-05 추가] 캐릭터 설명 자동 조회용
 
             log.debug("AI 프롬프트 생성 요청: {}자", koreanText.length());
