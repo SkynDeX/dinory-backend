@@ -95,21 +95,25 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
+            # 배포 디렉토리로 이동
             cd /home/${{ secrets.SERVER_USERNAME }}/dinory
 
             # 최신 이미지 가져오기
             docker pull ${{ secrets.DOCKER_USERNAME }}/dinory-backend:latest
 
             # 기존 컨테이너 중지 및 제거
-            docker-compose -f dinory-etc/deployment/instance1/docker-compose.instance1.yml stop backend
-            docker-compose -f dinory-etc/deployment/instance1/docker-compose.instance1.yml rm -f backend
+            docker-compose -f docker-compose.instance1.yml stop backend 2>/dev/null || true
+            docker-compose -f docker-compose.instance1.yml rm -f backend 2>/dev/null || true
 
             # 새 컨테이너 시작
-            docker-compose -f dinory-etc/deployment/instance1/docker-compose.instance1.yml up -d backend
+            docker-compose -f docker-compose.instance1.yml up -d backend
 
             # 컨테이너 상태 확인 (30초 대기 후)
             sleep 30
-            docker-compose -f dinory-etc/deployment/instance1/docker-compose.instance1.yml ps backend
+            docker-compose -f docker-compose.instance1.yml ps backend
+
+            # 로그 확인 (최근 30줄)
+            docker-compose -f docker-compose.instance1.yml logs --tail 30 backend
 
             # 사용하지 않는 이미지 정리
             docker image prune -f
