@@ -7,5 +7,9 @@ import java.util.List;
 
 public interface ChildDinoRepository extends JpaRepository<ChildDinoEntity, Long> {
     List<ChildDinoEntity> findByChildId(Long childId);    // [2025-11-07 김광현] memberId-> childId 로 변경
+
+    // [2025-11-11 김광현] 공룡 중복체크
+    boolean existsByChildIdAndColorType(Long childId, String colorType);
+
 }
 

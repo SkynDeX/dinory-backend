@@ -37,6 +37,12 @@ public class ChildDinoService {
     // 부화 저장
     public ChildDinoEntity hatchDino(Long memberId, Long childId, String name, String colorType) {
         validateChildOwnership(memberId, childId);
+
+        // [2025-11-11 김광현] 공룡 중복체크
+        if(dinoRepository.existsByChildIdAndColorType(childId, colorType)) {
+            throw  new RuntimeException("이미 보유 중인 공룡입니다.");
+        }
+
         ChildDinoEntity dino = ChildDinoEntity.builder()
                 .childId(childId)                        // memberId → childId
                 .dinoName(name)                            // 프론트에서 전달한 이름
