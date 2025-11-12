@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.coyote.Response;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -286,6 +287,20 @@ public class StoryController {
         log.info("조회된 동화 완료 기록: {}개", dtos.size());
 
         return ResponseEntity.ok(dtos);
+    }
+
+    /*
+    * [2025-11-12 김광현] 랜덤 동화 추천(로그인 전)
+    */
+    @GetMapping("/random")
+    public ResponseEntity<List<RecommendedStoryDto>> getRandomStories(
+            @RequestParam(defaultValue = "5") Integer limit
+    ) {
+        log.info("=== 랜덤 도화 요청 -limit: {} ===", limit);
+
+        List<RecommendedStoryDto> randomStories = recommendationService.getRandomStories(limit);
+
+        return ResponseEntity.ok(randomStories);
     }
 
 }

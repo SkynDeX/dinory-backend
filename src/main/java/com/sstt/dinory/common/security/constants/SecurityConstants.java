@@ -67,6 +67,11 @@
         public static final String HEALTH_CHECK = "/actuator/health";
         public static final String STORY_HEALTH = "/api/story/health";
 
+        /*
+        * [2025-11-12 김광현] 랜덤 동화 API(로그인 전 사용자용)
+        * */
+        public static final String STORY_RANDOM = "/api/story/random";
+
         /**
          * RAG 메모리 API (FastAPI에서 호출)
          * <p>FastAPI의 MemoryService가 MySQL 데이터를 조회하기 위한 API</p>
@@ -101,6 +106,7 @@
             API_DOCS,
             HEALTH_CHECK,
             STORY_HEALTH,
+            STORY_RANDOM,   // [2025-11-12 김광현] 랜덤 동화 공개 추가
             RAG_CHAT_HISTORY,
             RAG_STORY_COMPLETIONS,
             FASTAPI_CHAT_SESSION,

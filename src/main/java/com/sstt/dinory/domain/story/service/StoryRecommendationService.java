@@ -93,5 +93,59 @@ public class StoryRecommendationService {
     private Integer parseEstimatedTime(Map<String, Object> metadata) {
         return 10; // 기본값
     }
+
+    /*
+     * [2025-11-12 김광현] picone에서 랜덤 동화 가져오기(로그인 하지 않은 사용자)
+     * */
+    public List<RecommendedStoryDto> getRandomStories(Integer limit) {
+        log.info("Pinecone에서 랜덤 동화 요청 - limit: {}", limit);
+
+        try {
+            // AI 서버 보냄
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("limit", limit != null ? limit : 5);
+            requestBody.put("random", true);
+
+            // 서버 응답
+            List<Map<String, Object>> aiResponse = webClientBuilder.build()
+                    .post()
+                    .uri(aiServerUrl + "/ai/recommend-stories")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                    .block();
+
+            // DTO 변환 (기존 getRecommendations와 동일)
+            List<RecommendedStoryDto> recommendations = new ArrayList<>();
+            for (Map<String, Object> item : aiResponse) {
+                Map<String, Object> metadata = (Map<String, Object>) item.get("metadata");
+
+                log.info("랜덤 동화 metadata: {}", metadata);
+
+                RecommendedStoryDto dto = RecommendedStoryDto.builder()
+                        .storyId((String) item.get("storyId"))
+                        .title((String) item.get("title"))
+                        .matchingScore((Integer) item.get("matchingScore"))
+                        .coverImageUrl(metadata != null ? (String) metadata.get("coverImageUrl") : null)
+                        .themes(metadata != null ? parseThemes(metadata) : List.of())
+                        .estimatedTime(metadata != null ? parseEstimatedTime(metadata) : 10)
+                        // [2025-11-12 김광현] AI 생성 줄거리 우선 사용
+                        .description(metadata != null
+                                ? (String) metadata.getOrDefault("ai_summary",
+                                metadata.getOrDefault("plotSummaryText", ""))
+                                : "")
+                        .build();
+
+                recommendations.add(dto);
+            }
+
+            log.info("랜덤 동화 {}개를 성공적으로 받았습니다.", recommendations.size());
+            return recommendations;
+
+        } catch (Exception e) {
+            log.error("랜덤 동화 조회 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("랜덤 동화 조회 중 오류가 발생했습니다." + e.getMessage());
+        }
+    }
 }
 

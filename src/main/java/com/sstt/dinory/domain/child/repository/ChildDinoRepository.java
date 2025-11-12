@@ -11,5 +11,8 @@ public interface ChildDinoRepository extends JpaRepository<ChildDinoEntity, Long
     // [2025-11-11 김광현] 공룡 중복체크
     boolean existsByChildIdAndColorType(Long childId, String colorType);
 
+    // [2025-11-12 김광현] 공룡 개수 세기 추가
+    long countByChildId(Long childId);
+
 }
 
