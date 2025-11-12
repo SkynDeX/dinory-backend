@@ -64,8 +64,12 @@ public class StoryRecommendationService {
                             .coverImageUrl(metadata != null ? (String) metadata.get("coverImageUrl") : null)
                             .themes(metadata != null ? parseThemes(metadata) : List.of())
                             .estimatedTime(metadata != null ? parseEstimatedTime(metadata) : 10)
-//                            .description(metadata != null ? (String) metadata.get("plotSummaryText") : "")
-                            .description(metadata != null ? (String) metadata.get("srcText") : "")
+                            // [2025-11-12 김광현] AI 생성 줄거리 우선 사용
+                            // ai_summary → plotSummaryText → 빈 문자열 순으로 우선순위
+                            .description(metadata != null
+                                ? (String) metadata.getOrDefault("ai_summary",
+                                    metadata.getOrDefault("plotSummaryText", ""))
+                                : "")
                             .build();
 
                     recommendations.add(dto);
