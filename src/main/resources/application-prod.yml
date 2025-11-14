@@ -7,8 +7,12 @@ spring:
         username: ${SPRING_DATASOURCE_USERNAME}
         password: ${SPRING_DATASOURCE_PASSWORD}
         hikari:
-            maximum-pool-size: 10
-            minimum-idle: 2
+            maximum-pool-size: 10           # 최대 커넥션 수
+            minimum-idle: 5                  # 최소 유휴 커넥션 (안정성)
+            connection-timeout: 30000        # 30초
+            idle-timeout: 600000             # 10분 (유휴 커넥션 유지)
+            max-lifetime: 1800000            # 30분 (커넥션 최대 수명)
+            leak-detection-threshold: 60000  # 60초 (커넥션 누수 감지)
 
     jpa:
         hibernate:
