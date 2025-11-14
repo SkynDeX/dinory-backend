@@ -6,6 +6,8 @@ import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
 import com.sstt.dinory.domain.chat.dto.GenerateChoicesRequest;
 import com.sstt.dinory.domain.chat.dto.GenerateChoicesResponse;
+import com.sstt.dinory.domain.chat.dto.NavigationIntentRequest;
+import com.sstt.dinory.domain.chat.dto.NavigationIntentResponse;
 import com.sstt.dinory.domain.chat.entity.ChatMessage;
 import com.sstt.dinory.domain.chat.entity.ChatSession;
 import com.sstt.dinory.domain.chat.repository.ChatMessageRepository;
@@ -695,6 +697,50 @@ public class ChatService {
                     .childId(newSession.getChildId())
                     .messages(List.of())
                     .startedAt(newSession.getStartedAt())
+                    .build();
+        }
+    }
+
+    /**
+     * [2025-11-14 추가] 사용자 메시지에서 페이지 이동 의도 분석
+     */
+    public NavigationIntentResponse analyzeNavigationIntent(NavigationIntentRequest request) {
+        try {
+            String url = aiServerUrl + "/api/chat/analyze-navigation";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("message", request.getMessage());
+
+            log.info("Analyzing navigation intent for message: {}", request.getMessage());
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            NavigationIntentResponse response = restTemplate.postForObject(url, entity, NavigationIntentResponse.class);
+
+            if (response != null) {
+                log.info("Navigation intent analysis result: hasIntent={}, targetPath={}, confidence={}",
+                        response.getHasNavigationIntent(), response.getTargetPath(), response.getConfidence());
+                return response;
+            }
+
+            log.warn("No navigation intent response from AI, returning default");
+            return NavigationIntentResponse.builder()
+                    .hasNavigationIntent(false)
+                    .targetPath(null)
+                    .confidence(0.0)
+                    .reason("AI 서버 응답 없음")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to analyze navigation intent: ", e);
+            return NavigationIntentResponse.builder()
+                    .hasNavigationIntent(false)
+                    .targetPath(null)
+                    .confidence(0.0)
+                    .reason("분석 실패: " + e.getMessage())
                     .build();
         }
     }

@@ -7,6 +7,8 @@ import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
 import com.sstt.dinory.domain.chat.dto.ChatResponseDto;
 import com.sstt.dinory.domain.chat.dto.GenerateChoicesRequest;
 import com.sstt.dinory.domain.chat.dto.GenerateChoicesResponse;
+import com.sstt.dinory.domain.chat.dto.NavigationIntentRequest;
+import com.sstt.dinory.domain.chat.dto.NavigationIntentResponse;
 import com.sstt.dinory.domain.chat.entity.ChatMessage;
 import com.sstt.dinory.domain.chat.repository.ChatMessageRepository;
 import com.sstt.dinory.domain.chat.service.ChatService;
@@ -125,5 +127,14 @@ public class ChatController {
     @GetMapping("/{sessionId}/story-completion")
     public ResponseEntity<?> getStoryCompletionBySession(@PathVariable Long sessionId) {
         return ResponseEntity.ok(chatService.getStoryCompletionBySession(sessionId));
+    }
+
+    /**
+     * [2025-11-14 추가] 사용자 메시지에서 페이지 이동 의도 분석
+     */
+    @PostMapping("/analyze-navigation")
+    public ResponseEntity<NavigationIntentResponse> analyzeNavigationIntent(@RequestBody NavigationIntentRequest request) {
+        NavigationIntentResponse response = chatService.analyzeNavigationIntent(request);
+        return ResponseEntity.ok(response);
     }
 }
