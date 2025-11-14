@@ -38,7 +38,8 @@ USER spring
 EXPOSE 8090
 
 # JVM options for 1GB RAM environment
-ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC"
+# Heap: 384MB (최소화), Metaspace: 256MB (증가), 나머지: OS/MySQL/시스템
+ENV JAVA_OPTS="-Xmx384m -Xms256m -XX:MaxMetaspaceSize=256m -XX:MetaspaceSize=128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1ReservePercent=10"
 
 # Run application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
