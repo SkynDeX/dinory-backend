@@ -137,4 +137,24 @@ public class ChatController {
         NavigationIntentResponse response = chatService.analyzeNavigationIntent(request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * [2025-11-17 추가] 특정 패턴을 포함하는 메시지 삭제 (과거 잘못된 응답 정리용)
+     */
+    @DeleteMapping("/session/{sessionId}/messages/pattern")
+    public ResponseEntity<?> deleteMessagesWithPattern(
+            @PathVariable Long sessionId,
+            @RequestParam String pattern) {
+        Map<String, Object> result = chatService.deleteMessagesWithPattern(sessionId, pattern);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * [2025-11-17 추가] 세션의 모든 메시지 삭제
+     */
+    @DeleteMapping("/session/{sessionId}/messages")
+    public ResponseEntity<?> clearSessionMessages(@PathVariable Long sessionId) {
+        Map<String, Object> result = chatService.clearSessionMessages(sessionId);
+        return ResponseEntity.ok(result);
+    }
 }

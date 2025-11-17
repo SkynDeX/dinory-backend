@@ -744,4 +744,47 @@ public class ChatService {
                     .build();
         }
     }
+
+    /**
+     * 특정 패턴을 포함하는 AI 메시지 삭제 (과거 잘못된 응답 정리용)
+     */
+    @Transactional
+    public Map<String, Object> deleteMessagesWithPattern(Long sessionId, String pattern) {
+        log.info("🗑️ 패턴 '{}' 포함 메시지 삭제 시작 (sessionId: {})", pattern, sessionId);
+
+        List<ChatMessage> messagesToDelete = chatMessageRepository
+                .findBySessionIdAndMessageContaining(sessionId, pattern);
+
+        int deletedCount = messagesToDelete.size();
+        chatMessageRepository.deleteAll(messagesToDelete);
+
+        log.info("✅ {} 개의 메시지 삭제 완료", deletedCount);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("deletedCount", deletedCount);
+        result.put("sessionId", sessionId);
+        result.put("pattern", pattern);
+        return result;
+    }
+
+    /**
+     * 세션의 모든 메시지 삭제
+     */
+    @Transactional
+    public Map<String, Object> clearSessionMessages(Long sessionId) {
+        log.info("🗑️ 세션 {} 의 모든 메시지 삭제 시작", sessionId);
+
+        List<ChatMessage> allMessages = chatMessageRepository
+                .findByChatSessionIdOrderByCreatedAtAsc(sessionId);
+
+        int deletedCount = allMessages.size();
+        chatMessageRepository.deleteByChatSessionId(sessionId);
+
+        log.info("✅ {} 개의 메시지 삭제 완료", deletedCount);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("deletedCount", deletedCount);
+        result.put("sessionId", sessionId);
+        return result;
+    }
 }

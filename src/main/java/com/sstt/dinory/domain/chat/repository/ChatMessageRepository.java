@@ -35,4 +35,17 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
         @Param("startDate") LocalDateTime startDate,
         @Param("endDate") LocalDateTime endDate
     );
+
+    // 특정 패턴을 포함하는 메시지 삭제 (과거 잘못된 응답 정리용)
+    @Query("SELECT cm FROM ChatMessage cm " +
+           "WHERE cm.chatSession.id = :sessionId " +
+           "AND cm.sender = 'AI' " +
+           "AND cm.message LIKE %:pattern%")
+    List<ChatMessage> findBySessionIdAndMessageContaining(
+        @Param("sessionId") Long sessionId,
+        @Param("pattern") String pattern
+    );
+
+    // 세션의 모든 메시지 삭제
+    void deleteByChatSessionId(Long sessionId);
 }
