@@ -18,7 +18,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -46,6 +48,26 @@ public class ChatController {
     public ResponseEntity<ChatResponseDto> sendMessage(@RequestBody ChatMessageRequest request) {
         ChatResponseDto response = chatService.sendMessage(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * [2025-11-17 추가] 네비게이션 메시지 저장 (AI 응답 없이)
+     * - 사용자 메시지와 시스템 응답만 DB에 저장
+     * - AI 서버 호출 없음
+     */
+    @PostMapping("/message/navigation")
+    public ResponseEntity<Map<String, Object>> saveNavigationMessage(
+        @RequestBody Map<String, Object> request
+    ) {
+        Long sessionId = Long.valueOf(request.get("sessionId").toString());
+        String userMessage = request.get("userMessage").toString();
+        String systemResponse = request.get("systemResponse").toString();
+
+        chatService.saveNavigationMessages(sessionId, userMessage, systemResponse);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/{sessionId}/end")

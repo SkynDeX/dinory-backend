@@ -787,4 +787,34 @@ public class ChatService {
         result.put("sessionId", sessionId);
         return result;
     }
+
+    /**
+     * [2025-11-17 추가] 네비게이션 메시지 저장 (AI 호출 없이)
+     * - 사용자 메시지와 시스템 응답만 DB에 저장
+     */
+    @Transactional
+    public void saveNavigationMessages(Long sessionId, String userMessage, String systemResponse) {
+        log.info("🧭 네비게이션 메시지 저장: sessionId={}", sessionId);
+
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("세션을 찾을 수 없습니다: " + sessionId));
+
+        // 사용자 메시지 저장
+        ChatMessage userMsg = ChatMessage.builder()
+                .chatSession(session)
+                .sender("USER")
+                .message(userMessage)
+                .build();
+        chatMessageRepository.save(userMsg);
+
+        // 시스템 응답 저장
+        ChatMessage systemMsg = ChatMessage.builder()
+                .chatSession(session)
+                .sender("AI")
+                .message(systemResponse)
+                .build();
+        chatMessageRepository.save(systemMsg);
+
+        log.info("✅ 네비게이션 메시지 저장 완료");
+    }
 }
