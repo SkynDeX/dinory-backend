@@ -1,5 +1,9 @@
 package com.sstt.dinory.domain.chat.service;
 
+import com.sstt.dinory.common.security.service.CustomUserDetails;
+import com.sstt.dinory.domain.auth.entity.Member;
+import com.sstt.dinory.domain.child.entity.Child;
+import com.sstt.dinory.domain.child.repository.ChildRepository;
 import com.sstt.dinory.domain.chat.dto.ChatInitFromStoryRequest;
 import com.sstt.dinory.domain.chat.dto.ChatInitRequest;
 import com.sstt.dinory.domain.chat.dto.ChatMessageRequest;
@@ -19,6 +23,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -41,6 +47,7 @@ public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final StoryCompletionRepository storyCompletionRepository;
     private final com.sstt.dinory.domain.story.repository.SceneRepository sceneRepository;  // Scene 조회용
+    private final ChildRepository childRepository;  // [2025-11-17 추가] 세션 소유권 검증용
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${ai.server.url:http://localhost:8000}")
@@ -81,6 +88,25 @@ public class ChatService {
         // StoryCompletion 조회
         StoryCompletion completion = storyCompletionRepository.findById(request.getCompletionId())
                 .orElseThrow(() -> new RuntimeException("StoryCompletion을 찾을 수 없습니다: " + request.getCompletionId()));
+
+        // [2025-11-17 강화] 보안: childId 필수 검증 및 소유권 확인
+        Long completionChildId = completion.getChild().getId();
+
+        // childId가 null이면 거부 (보안 강화)
+        if (request.getChildId() == null) {
+            log.error("🚨 [보안 위반] childId가 제공되지 않음!");
+            throw new RuntimeException("자녀 정보가 필요합니다.");
+        }
+
+        // completionId가 해당 child의 것인지 검증
+        if (!request.getChildId().equals(completionChildId)) {
+            log.error("🚨 [보안 위반] 권한 없는 StoryCompletion 접근 시도!");
+            log.error("   요청한 childId={}, 실제 completion의 childId={}",
+                     request.getChildId(), completionChildId);
+            throw new RuntimeException("해당 동화 완료 기록에 접근 권한이 없습니다.");
+        }
+        log.info("✅ [보안 검증 통과] completionId={}, childId={}",
+                 request.getCompletionId(), completionChildId);
 
         // StoryCompletion 요약 정보 생성
         StoryCompletionSummaryDto summary = StoryCompletionSummaryDto.from(completion);
@@ -139,7 +165,7 @@ public class ChatService {
         // AI에게 동화 기반 첫 인사 메시지 생성 요청
         String firstAiMessage = generateFirstMessageFromStory(session.getId(), summary);
 
-        // AI의 첫 메시지 저장
+        // AI의 첫 메시지 저장 (대화 흐름 유지를 위해 DB에 저장)
         ChatMessage aiMessage = ChatMessage.builder()
                 .chatSession(session)
                 .sender("AI")
@@ -148,14 +174,17 @@ public class ChatService {
 
         chatMessageRepository.save(aiMessage);
 
-        // 전체 메시지 조회
-        List<ChatMessage> allMessages = chatMessageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
+        // [2025-11-17 수정] 동화 완료 시에는 과거 메시지를 반환하지 않음
+        // - 세션은 재사용하여 대화 흐름 유지
+        // - 하지만 화면에는 능력치 요약 + 새 메시지만 표시
+        // - Frontend에서 능력치 요약을 먼저 추가한 후 aiResponse를 표시
+        log.info("✅ 동화 완료 세션 초기화 완료 (과거 메시지 숨김, 새 메시지만 반환)");
 
         return ChatResponseDto.builder()
                 .sessionId(session.getId())
                 .childId(session.getChildId())
                 .aiResponse(firstAiMessage)
-                .messages(convertToMessageDtos(allMessages))
+                .messages(new java.util.ArrayList<>())  // 빈 배열 반환 (과거 메시지 숨김)
                 .startedAt(session.getStartedAt())
                 .build();
     }
@@ -165,6 +194,9 @@ public class ChatService {
         // 세션 조회
         ChatSession session = chatSessionRepository.findById(request.getSessionId())
                 .orElseThrow(() -> new RuntimeException("Chat session not found: " + request.getSessionId()));
+
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        validateSessionOwnership(session);
 
         // 사용자 메시지 저장
         ChatMessage userMessage = ChatMessage.builder()
@@ -214,6 +246,9 @@ public class ChatService {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
 
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        validateSessionOwnership(session);
+
         session.setEndedAt(LocalDateTime.now());
         chatSessionRepository.save(session);
 
@@ -231,6 +266,9 @@ public class ChatService {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
 
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        validateSessionOwnership(session);
+
         session.setLastClosedAt(LocalDateTime.now());
         chatSessionRepository.save(session);
 
@@ -244,6 +282,9 @@ public class ChatService {
     public ChatResponseDto getChatSession(Long sessionId) {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
+
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        validateSessionOwnership(session);
 
         List<ChatResponseDto.ChatMessageDto> messageDtos;
 
@@ -615,14 +656,12 @@ public class ChatService {
         if (existingSession.isPresent()) {
             // 기존 세션 있음 - 대화 내역과 함께 반환
             ChatSession session = existingSession.get();
-            log.info("✅ 기존 활성 세션 발견: sessionId={}, 시작 시간={}", session.getId(), session.getStartedAt());
+            log.info("✅ 기존 활성 세션 발견: sessionId={}, storyCompletionId={}, 시작 시간={}",
+                     session.getId(), session.getStoryCompletionId(), session.getStartedAt());
 
-            // [2025-11-10 수정] 일반 대화에서는 동화 정보를 제거 (Pinecone만 사용)
-            if (session.getStoryCompletionId() != null) {
-                log.info("🔄 일반 대화 모드로 전환: storyCompletionId 초기화 (기존: {})", session.getStoryCompletionId());
-                session.setStoryCompletionId(null);
-                chatSessionRepository.save(session);
-            }
+            // [2025-11-17 수정] storyCompletionId 유지 - AI가 최신 동화 정보를 기억하도록
+            // - 동화 정보를 삭제하지 않음
+            // - DinoCharacter도 최근 읽은 동화를 기억해야 함
 
             // [2025-11-07 수정] Pinecone에서 대화 내역 조회 (최근 20개만 - UX 개선)
             List<ChatResponseDto.ChatMessageDto> messageDtos;
@@ -752,6 +791,11 @@ public class ChatService {
     public Map<String, Object> deleteMessagesWithPattern(Long sessionId, String pattern) {
         log.info("🗑️ 패턴 '{}' 포함 메시지 삭제 시작 (sessionId: {})", pattern, sessionId);
 
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
+        validateSessionOwnership(session);
+
         List<ChatMessage> messagesToDelete = chatMessageRepository
                 .findBySessionIdAndMessageContaining(sessionId, pattern);
 
@@ -773,6 +817,11 @@ public class ChatService {
     @Transactional
     public Map<String, Object> clearSessionMessages(Long sessionId) {
         log.info("🗑️ 세션 {} 의 모든 메시지 삭제 시작", sessionId);
+
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Chat session not found: " + sessionId));
+        validateSessionOwnership(session);
 
         List<ChatMessage> allMessages = chatMessageRepository
                 .findByChatSessionIdOrderByCreatedAtAsc(sessionId);
@@ -799,6 +848,9 @@ public class ChatService {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("세션을 찾을 수 없습니다: " + sessionId));
 
+        // [2025-11-17 추가] 보안: 세션 소유권 검증
+        validateSessionOwnership(session);
+
         // 사용자 메시지 저장
         ChatMessage userMsg = ChatMessage.builder()
                 .chatSession(session)
@@ -816,5 +868,69 @@ public class ChatService {
         chatMessageRepository.save(systemMsg);
 
         log.info("✅ 네비게이션 메시지 저장 완료");
+    }
+
+    // ========== [2025-11-17 추가] 보안: 인증 및 권한 검증 헬퍼 메서드 ==========
+
+    /**
+     * 현재 로그인한 사용자의 Member 정보 가져오기
+     *
+     * @return 현재 인증된 Member 객체
+     * @throws RuntimeException 인증되지 않은 사용자이거나 Member 정보가 없을 경우
+     */
+    private Member getCurrentAuthenticatedMember() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.error("🚨 [보안 위반] 인증되지 않은 사용자의 접근 시도");
+            throw new RuntimeException("인증이 필요합니다.");
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof CustomUserDetails)) {
+            log.error("🚨 [보안 위반] 잘못된 인증 정보 타입: {}", principal.getClass().getName());
+            throw new RuntimeException("인증 정보가 올바르지 않습니다.");
+        }
+
+        CustomUserDetails userDetails = (CustomUserDetails) principal;
+        Member member = userDetails.getMember();
+
+        if (member == null) {
+            log.error("🚨 [보안 위반] Member 정보가 없는 UserDetails");
+            throw new RuntimeException("사용자 정보를 찾을 수 없습니다.");
+        }
+
+        log.debug("✅ 인증된 사용자: memberId={}, email={}", member.getId(), member.getEmail());
+        return member;
+    }
+
+    /**
+     * 세션이 현재 로그인한 사용자의 자녀에게 속하는지 검증
+     *
+     * <p>현재 로그인한 Member의 자녀 목록에 해당 세션의 childId가 포함되어 있는지 확인합니다.</p>
+     *
+     * @param session 검증할 ChatSession
+     * @throws RuntimeException 세션이 현재 사용자의 자녀에게 속하지 않을 경우
+     */
+    private void validateSessionOwnership(ChatSession session) {
+        Member currentMember = getCurrentAuthenticatedMember();
+        Long sessionChildId = session.getChildId();
+
+        // DB에서 현재 Member의 자녀 목록 조회
+        List<Child> memberChildren = childRepository.findByMemberId(currentMember.getId());
+
+        // 자녀 목록에서 sessionChildId가 있는지 확인
+        boolean isOwner = memberChildren.stream()
+                .anyMatch(child -> child.getId().equals(sessionChildId));
+
+        if (!isOwner) {
+            log.error("🚨 [보안 위반] 다른 사용자의 세션 접근 시도!");
+            log.error("   memberId={}, 요청한 sessionId={}, sessionChildId={}",
+                     currentMember.getId(), session.getId(), sessionChildId);
+            throw new RuntimeException("해당 채팅 세션에 접근 권한이 없습니다.");
+        }
+
+        log.debug("✅ [보안 검증 통과] sessionId={}, childId={}, memberId={}",
+                 session.getId(), sessionChildId, currentMember.getId());
     }
 }

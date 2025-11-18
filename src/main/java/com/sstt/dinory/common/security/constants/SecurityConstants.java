@@ -82,9 +82,9 @@
         /**
          * FastAPI 세션 복원 API (FastAPI에서 호출)
          * <p>FastAPI가 서버 재시작 시 세션의 대화 히스토리와 스토리 컨텍스트를 복원하기 위한 API</p>
-         * <p>[2025-11-11 수정] Spring Security 경로 매칭을 위해 와일드카드(*) 사용</p>
+         * <p>[2025-11-17 보안 강화] /api/chat/* 제거 - 너무 광범위한 공개 접근 방지</p>
+         * <p>FastAPI가 필요한 특정 엔드포인트만 공개</p>
          */
-        public static final String FASTAPI_CHAT_SESSION = "/api/chat/*";
         public static final String FASTAPI_CHAT_STORY_COMPLETION = "/api/chat/*/story-completion";
 
         /**
@@ -97,6 +97,7 @@
          * <p><strong>주의:</strong> 비즈니스 로직 엔드포인트는 여기에 추가하지 마세요!
          * 이미지, TTS, 감정 분석 등은 인증이 필요합니다.</p>
          * <p><strong>/api/auth/me, /api/auth/logout, /api/auth/withdraw는 인증 필요하므로 여기에 포함되지 않습니다!</strong></p>
+         * <p><strong>[2025-11-17 보안 강화] /api/chat/* 제거 - 채팅 API는 인증 필수</strong></p>
          */
         public static final String[] PUBLIC_ENDPOINTS = {
             AUTH_REFRESH,
@@ -109,8 +110,7 @@
             STORY_RANDOM,   // [2025-11-12 김광현] 랜덤 동화 공개 추가
             RAG_CHAT_HISTORY,
             RAG_STORY_COMPLETIONS,
-            FASTAPI_CHAT_SESSION,
-            FASTAPI_CHAT_STORY_COMPLETION,
+            FASTAPI_CHAT_STORY_COMPLETION,  // [2025-11-17 수정] FASTAPI_CHAT_SESSION 제거
         };
 
 
