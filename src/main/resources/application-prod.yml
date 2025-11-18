@@ -29,6 +29,11 @@ app:
 
 server:
     port: 8090
+    forward-headers-strategy: framework
+    tomcat:
+        remoteip:
+            protocol-header: X-Forwarded-Proto
+            remote-ip-header: X-Forwarded-For
     compression:
         enabled: true
         mime-types: application/json,application/xml,text/html,text/xml,text/plain
