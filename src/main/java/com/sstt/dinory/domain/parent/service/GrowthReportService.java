@@ -12,12 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -61,9 +56,14 @@ public class GrowthReportService {
 
         log.info("조회된 동화: 전반부={}, 후반부={}, 전체={}", firstHalfCompletions.size(), secondHalfCompletions.size(), allCompletions.size());
 
-        // Before/After 능력치 계산
-        Map<String, Double> beforeAbilities = calculateAbilities(firstHalfCompletions);
-        Map<String, Double> afterAbilities = calculateAbilities(secondHalfCompletions);
+        // Before/After 능력치 계산 (기본 5가지 능력)
+        Map<String, Double> beforeChildAbilities = calculateAbilities(firstHalfCompletions);
+        Map<String, Double> afterChildAbilities = calculateAbilities(secondHalfCompletions);
+
+        // 부모용 전문 영역으로 변환 (5가지 통합 능력)
+        Map<String, Double> beforeAbilities = convertToParentAbilities(beforeChildAbilities);
+        Map<String, Double> afterAbilities = convertToParentAbilities(afterChildAbilities);
+
 
         // 강점/성장가능 영역 기본 데이터 (점수, 예시만)
         List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
@@ -120,8 +120,12 @@ public class GrowthReportService {
                 .findByChildIdAndCompletedAtBetween(childId, startDate, endDate);
 
         // Before/After 능력치 계산
-        Map<String, Double> beforeAbilities = calculateAbilities(firstHalfCompletions);
-        Map<String, Double> afterAbilities = calculateAbilities(secondHalfCompletions);
+        Map<String, Double> beforeChildAbilities = calculateAbilities(firstHalfCompletions);
+        Map<String, Double> afterChildAbilities = calculateAbilities(secondHalfCompletions);
+
+        // 부모용 전문 영역으로 변환 (5가지 통합 능력)
+        Map<String, Double> beforeAbilities = convertToParentAbilities(beforeChildAbilities);
+        Map<String, Double> afterAbilities = convertToParentAbilities(afterChildAbilities);
 
         // 강점/성장가능 영역 기본 데이터
         List<Map<String, Object>> basicStrengths = findTopAreasBasic(afterAbilities, secondHalfCompletions, 2);
@@ -174,6 +178,24 @@ public class GrowthReportService {
 
         log.info("성장 리포트 AI 분석 완료");
         return result;
+    }
+
+    // 부모 능력 > 자식 능력 리스트로 역매핑 (가중치 높은 순)
+    private List<String> getChildAbilitiesFromParent(String parentAbility) {
+        switch (parentAbility) {
+            case "정서 인식 및 조절":
+                return Arrays.asList("공감", "책임감");
+            case "사회적 상호작용":
+                return Arrays.asList("우정", "공감");
+            case "자아 개념":
+                return Arrays.asList("책임감", "용기");
+            case "도전 및 적응력":
+                return Arrays.asList("용기", "창의성");
+            case "창의성 및 문제해결":
+                return Arrays.asList("창의성", "책임감");
+            default:
+                return new ArrayList<>();
+        }
     }
 
     // 🚀 통합 AI 콘텐츠 생성 (한 번의 API 호출)
@@ -642,8 +664,12 @@ public class GrowthReportService {
     }
 
     // 예시 찾기 - 여러 동화의 예시를 리스트로 반환
-    private List<String> findExamples(List<StoryCompletion> completions, String ability) {
-        log.info("=== findExamples 시작: ability={}, completions={} ===", ability, completions.size());
+    private List<String> findExamples(List<StoryCompletion> completions, String parentAbility) {
+        log.info("=== findExamples 시작: ability={}, completions={} ===", parentAbility, completions.size());
+
+        // 부모 능력 > 자식 능력 리스트 (우선순위 순)
+        List<String> childAbilities = getChildAbilitiesFromParent(parentAbility);
+        log.info("역매핑된 자식 능력: {}", childAbilities);
 
         List<String> examples = new ArrayList<>();
         Set<String> usedStories = new HashSet<>();  // 동화 제목 중복 방지
@@ -666,8 +692,8 @@ public class GrowthReportService {
                 for (StoryCompletion.ChoiceRecord choice : choices) {
                     log.info("  선택지: abilityType={}, text={}", choice.getAbilityType(), choice.getAbilityPoints(), choice.getChoiceText());
 
-                    // 해당 능력이고, 점수가 12점 이상인 긍적적인 선택만 예시로 적용
-                    if (ability.equals(choice.getAbilityType()) &&
+                    // 자식 능력 중 하나와 매핑되고, 점수가 12점 이상인 긍적적인 선택만 예시로 적용
+                    if (childAbilities.contains(choice.getAbilityType()) &&
                         choice.getAbilityType() != null &&
                         choice.getAbilityPoints() >= 12) {
 
@@ -695,11 +721,43 @@ public class GrowthReportService {
         // 예시가 없으면 기본 메시지
         if (examples.isEmpty()) {
             log.warn("예시를 찾지 못함. 기본 메시지 사용");
-            examples.add(ability + " 능력을 보여주는 선택을 했습니다.");
+            examples.add(parentAbility + " 능력을 보여주는 선택을 했습니다.");
         }
 
         log.info("=== findExamples 완료: {}개 예시 반환 ===", examples.size());
         return examples;
     }
 
+    // 아이 능력치(5가지) → 부모용 전문 영역(5가지 통합 능력)으로 변환
+    // OverviewService와 동일한 매핑 로직 적용
+    private Map<String, Double> convertToParentAbilities(Map<String, Double> childAbilities) {
+        Map<String, Double> result = new LinkedHashMap<>();
+
+        // 정서 인식 및 조절 = 공감(80%) + 책임감(20%)
+        result.put("정서 인식 및 조절",
+                childAbilities.getOrDefault("공감", 0.0) * 0.8 +
+                        childAbilities.getOrDefault("책임감", 0.0) * 0.2);
+
+        // 사회적 상호작용 = 우정(70%) + 공감(30%)
+        result.put("사회적 상호작용",
+                childAbilities.getOrDefault("우정", 0.0) * 0.7 +
+                        childAbilities.getOrDefault("공감", 0.0) * 0.3);
+
+        // 자아 개념 = 책임감(70%) + 용기(30%)
+        result.put("자아 개념",
+                childAbilities.getOrDefault("책임감", 0.0) * 0.7 +
+                        childAbilities.getOrDefault("용기", 0.0) * 0.3);
+
+        // 도전 및 적응력 = 용기(70%) + 창의성(30%)
+        result.put("도전 및 적응력",
+                childAbilities.getOrDefault("용기", 0.0) * 0.7 +
+                        childAbilities.getOrDefault("창의성", 0.0) * 0.3);
+
+        // 창의성 및 문제해결 = 창의성(80%) + 책임감(20%)
+        result.put("창의성 및 문제해결",
+                childAbilities.getOrDefault("창의성", 0.0) * 0.8 +
+                        childAbilities.getOrDefault("책임감", 0.0) * 0.2);
+
+        return result;
+    }
 }
